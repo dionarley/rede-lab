@@ -16,7 +16,8 @@ rede-lab/
 ├── .env                      # configuração local (ignorada pelo git)
 ├── .githooks/
 │   └── pre-commit            # bloqueia .env/segredos antes do commit
-├── .github/workflows/ci.yml  # CI: shellcheck + guard
+├── .github/workflows/ci.yml  # CI: shellcheck + guard + compose
+├── docker-compose.yml        # Docker Compose / Podman Compose
 ├── README.md
 ├── docs/
 │   ├── topologia.md          # rede, diagrama e endereçamento
@@ -24,6 +25,7 @@ rede-lab/
 │   ├── wireguard.md          # implementação e testes de WireGuard
 │   ├── vpn-operacao.md       # operação da VPN
 │   ├── engines.md            # suporte Podman/Docker
+│   ├── compose.md            # uso do Docker/Podman Compose
 │   └── seguranca.md          # política de segredos
 ├── network/
 │   └── lab-network.sh        # criação da rede bridge
@@ -48,6 +50,7 @@ rede-lab/
 │   ├── destroy.sh            # derruba todo o lab
 │   ├── doctor.sh             # diagnóstico
 │   ├── guard.sh              # bloqueia .env/segredos
+│   ├── compose.sh            # wrapper Docker/Podman Compose
 │   ├── vpn.sh                # gerencia a instância VPN
 │   └── test-ssh.sh           # testa SSH pelo túnel
 └── testes/
@@ -63,7 +66,10 @@ CONTAINER_ENGINE=auto
 
 NETWORK_NAME=lab-net
 SUBNET=10.0.0.0/24
-GATEWAY=10.0.0.1
+# IP reservado da bridge; o gateway lógico é o ISP 10.0.0.1.
+GATEWAY=10.0.0.254
+
+COMPOSE_PROJECT_NAME=rede-lab
 
 ISP_IP=10.0.0.1
 CASA_IP=10.0.0.10
@@ -116,6 +122,20 @@ chmod +x network/lab-network.sh scripts/*.sh
 ./scripts/deploy.sh
 ```
 
+### 1b. Alternativa: Docker/Podman Compose
+
+```bash
+./scripts/compose.sh up      # constrói, sobe e configura a VPN
+./scripts/compose.sh ps      # lista os serviços
+./scripts/compose.sh logs    # logs
+./scripts/compose.sh down    # derruba containers e rede
+./scripts/compose.sh reset   # down + remove volumes (chaves WG)
+```
+
+O wrapper detecta `docker compose`, `podman compose` ou `podman-compose`.
+Também disponível via `make compose-up`, `make compose-down`, etc.
+Detalhes em [`docs/compose.md`](docs/compose.md).
+
 ### 2. Gerenciar a VPN
 
 ```bash
@@ -147,7 +167,8 @@ labuser
 ### 5. Derrubar tudo
 
 ```bash
-./scripts/destroy.sh
+./scripts/destroy.sh        # lab criado via scripts
+./scripts/compose.sh down   # lab criado via Compose
 ```
 
 ## 📋 Endereçamento

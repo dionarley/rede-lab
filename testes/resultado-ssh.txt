@@ -1,4 +1,4 @@
-Data: ter 20 out 2026 15:19:20 -03
+Data: ter 20 out 2026 15:56:44 -03
 Engine: podman
 Origem: casa (10.0.99.10)
 Destino: servidor (10.0.99.1)
@@ -12,12 +12,12 @@ Destino: servidor (10.0.99.1)
 ==================================================
 --- Servidor (wg0) ---
 interface: wg0
-  public key: AifbXFE+astth31cHHrZF2SiQnQDeKP1zliNnmA9DCg=
+  public key: /7FPOxSgidhOInhyx+bDjBraC5wMobzIqw7OzCNQJw0=
   private key: (hidden)
   listening port: 51820
 
-peer: /2l+g/kPqYIczsn/xas1vzR35DO+7mk4VWzMKJQ9dm0=
-  endpoint: 10.0.0.10:43442
+peer: rysbv430p5gErk3wOcUolrBeGDgfEfWLSyvd8P/smls=
+  endpoint: 10.0.0.10:50198
   allowed ips: 10.0.99.10/32
   latest handshake: 1 second ago
   transfer: 180 B received, 124 B sent
@@ -25,11 +25,11 @@ peer: /2l+g/kPqYIczsn/xas1vzR35DO+7mk4VWzMKJQ9dm0=
 
 --- Casa (wg1) ---
 interface: wg1
-  public key: /2l+g/kPqYIczsn/xas1vzR35DO+7mk4VWzMKJQ9dm0=
+  public key: rysbv430p5gErk3wOcUolrBeGDgfEfWLSyvd8P/smls=
   private key: (hidden)
-  listening port: 43442
+  listening port: 50198
 
-peer: AifbXFE+astth31cHHrZF2SiQnQDeKP1zliNnmA9DCg=
+peer: /7FPOxSgidhOInhyx+bDjBraC5wMobzIqw7OzCNQJw0=
   endpoint: 10.0.0.20:51820
   allowed ips: 10.0.99.1/32
   latest handshake: 2 seconds ago
@@ -38,5 +38,5 @@ peer: AifbXFE+astth31cHHrZF2SiQnQDeKP1zliNnmA9DCg=
 Warning: Permanently added '10.0.99.1' (ED25519) to the list of known hosts.
 SSH_VIA_WG_OK
 labuser
-304cdfce66bf
+022f7929a274
 RESULTADO: SUCESSO

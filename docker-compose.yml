@@ -1,0 +1,81 @@
+# ============================================================
+# Rede Lab — Docker Compose / Podman Compose
+# ============================================================
+# Subir:    ./scripts/compose.sh up
+# Parar:    ./scripts/compose.sh down
+# Resetar:  ./scripts/compose.sh reset   (remove volumes/chaves WG)
+# Validar:  ./scripts/compose.sh config
+#
+# A VPN WireGuard é configurada por ./scripts/vpn.sh start,
+# chamado automaticamente pelo "up".
+# ============================================================
+
+services:
+  isp:
+    build:
+      context: ./isp
+      dockerfile: Dockerfile
+    image: lab-isp
+    container_name: isp
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.forwarding: "1"
+    networks:
+      lab-net:
+        ipv4_address: ${ISP_IP:-10.0.0.1}
+
+  servidor:
+    build:
+      context: ./servidor
+      dockerfile: Dockerfile
+    image: lab-servidor
+    container_name: servidor
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - wg-servidor:/etc/wireguard
+    networks:
+      lab-net:
+        ipv4_address: ${SERVIDOR_IP:-10.0.0.20}
+    depends_on:
+      - isp
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x sshd >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  casa:
+    build:
+      context: ./casa
+      dockerfile: Dockerfile
+    image: lab-casa
+    container_name: casa
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - wg-casa:/etc/wireguard
+    networks:
+      lab-net:
+        ipv4_address: ${CASA_IP:-10.0.0.10}
+    depends_on:
+      - isp
+
+networks:
+  lab-net:
+    name: lab-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${SUBNET:-10.0.0.0/24}
+          # IP reservado da bridge (não é container). O gateway lógico é o ISP 10.0.0.1.
+          gateway: ${GATEWAY:-10.0.0.254}
+
+volumes:
+  wg-servidor:
+    name: rede-lab-wg-servidor
+  wg-casa:
+    name: rede-lab-wg-casa
