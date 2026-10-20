@@ -1,0 +1,21 @@
+# Configuração SSH do servidor (lab)
+Port 22
+AddressFamily inet
+ListenAddress 0.0.0.0
+
+# Autenticação
+PasswordAuthentication yes
+PubkeyAuthentication yes
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+
+# Acesso
+PermitRootLogin no
+AllowUsers labuser
+
+# Segurança básica do lab
+X11Forwarding no
+PrintMotd no
+StrictModes no
+
+Subsystem sftp /usr/libexec/openssh/sftp-server

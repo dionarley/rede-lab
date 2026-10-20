@@ -1,0 +1,13 @@
+Host servidor-wg
+    HostName 10.0.99.1
+    User labuser
+    Port 22
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+Host servidor-wan
+    HostName 10.0.0.20
+    User labuser
+    Port 22
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null

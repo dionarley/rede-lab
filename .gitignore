@@ -1,0 +1,13 @@
+# Chaves privadas WireGuard geradas dinamicamente (nunca commitar)
+wireguard/keys/*.key
+wireguard/keys/*.pub
+
+# Temporários
+/tmp/
+*.tmp
+*.log
+
+# Editor
+.vscode/
+.idea/
+*.swp

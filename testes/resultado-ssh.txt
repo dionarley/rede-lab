@@ -1,0 +1,42 @@
+Data: ter 20 out 2026 15:19:20 -03
+Engine: podman
+Origem: casa (10.0.99.10)
+Destino: servidor (10.0.99.1)
+
+[vpn] Garantindo chaves...
+[vpn] Subindo túnel no servidor (10.0.99.1:51820)...
+[vpn] Subindo túnel na casa (10.0.99.10)...
+[vpn] VPN ativa.
+==================================================
+  STATUS DA VPN - WireGuard
+==================================================
+--- Servidor (wg0) ---
+interface: wg0
+  public key: AifbXFE+astth31cHHrZF2SiQnQDeKP1zliNnmA9DCg=
+  private key: (hidden)
+  listening port: 51820
+
+peer: /2l+g/kPqYIczsn/xas1vzR35DO+7mk4VWzMKJQ9dm0=
+  endpoint: 10.0.0.10:43442
+  allowed ips: 10.0.99.10/32
+  latest handshake: 1 second ago
+  transfer: 180 B received, 124 B sent
+  persistent keepalive: every 15 seconds
+
+--- Casa (wg1) ---
+interface: wg1
+  public key: /2l+g/kPqYIczsn/xas1vzR35DO+7mk4VWzMKJQ9dm0=
+  private key: (hidden)
+  listening port: 43442
+
+peer: AifbXFE+astth31cHHrZF2SiQnQDeKP1zliNnmA9DCg=
+  endpoint: 10.0.0.20:51820
+  allowed ips: 10.0.99.1/32
+  latest handshake: 2 seconds ago
+  transfer: 124 B received, 180 B sent
+  persistent keepalive: every 15 seconds
+Warning: Permanently added '10.0.99.1' (ED25519) to the list of known hosts.
+SSH_VIA_WG_OK
+labuser
+304cdfce66bf
+RESULTADO: SUCESSO

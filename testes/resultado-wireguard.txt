@@ -1,0 +1,33 @@
+==================================================
+ TESTE WIREGUARD - Handshake e túnel
+==================================================
+Data: 2026-10-20
+Engine: podman 5.8.4
+
+--- Servidor (wg0) ---
+interface: wg0
+  public key: AifbXFE+astth31cHHrZF2SiQnQDeKP1zliNnmA9DCg=
+  listening port: 51820
+
+peer: /2l+g/kPqYIczsn/xas1vzR35DO+7mk4VWzMKJQ9dm0=
+  allowed ips: 10.0.99.10/32
+  latest handshake: 15 seconds ago
+  transfer: 180 B received, 124 B sent
+  persistent keepalive: every 15 seconds
+
+--- Casa (wg1) ---
+interface: wg1
+  public key: /2l+g/kPqYIczsn/xas1vzR35DO+7mk4VWzMKJQ9dm0=
+  listening port: 48811
+
+peer: AifbXFE+astth31cHHrZF2SiQnQDeKP1zliNnmA9DCg=
+  endpoint: 10.0.0.20:51820
+  allowed ips: 10.0.99.1/32
+  latest handshake: Now
+  transfer: 124 B received, 180 B sent
+  persistent keepalive: every 15 seconds
+
+RESULTADO: SUCESSO
+- Handshake concluído nos dois lados.
+- Endpoint correto: 10.0.0.20:51820.
+- Túnel ativo com persistent-keepalive de 15s.
