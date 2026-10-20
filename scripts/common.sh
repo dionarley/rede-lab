@@ -10,6 +10,12 @@ cd "$ROOT_DIR"
 # Preserva CONTAINER_ENGINE definido no ambiente (tem precedência sobre o .env)
 _ENV_ENGINE="${CONTAINER_ENGINE-}"
 
+# Cria .env local a partir do template (nunca versionado)
+if [ ! -f .env ] && [ -f .env.example ]; then
+    cp .env.example .env
+    echo "[common] .env criado a partir de .env.example (local, ignorado pelo git)" >&2
+fi
+
 # Carrega variáveis do .env (se existir)
 if [ -f .env ]; then
     set -a

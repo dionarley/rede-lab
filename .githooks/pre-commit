@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Hook de pre-commit: bloqueia .env, chaves e segredos.
+set -euo pipefail
+
+exec "$(git rev-parse --show-toplevel)/scripts/guard.sh"

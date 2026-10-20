@@ -36,3 +36,14 @@ jobs:
           test -f wireguard/wg0.conf
           test -f wireguard/wg1.conf
           echo "Configs essenciais presentes."
+
+  guard:
+    name: Guard - sem .env ou segredos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bloquear .env, chaves e segredos
+        run: |
+          chmod +x scripts/guard.sh
+          ./scripts/guard.sh

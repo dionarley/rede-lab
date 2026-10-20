@@ -1,6 +1,18 @@
-# Chaves privadas WireGuard geradas dinamicamente (nunca commitar)
+# Configuração local — NUNCA versionar (use .env.example como template)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+!.env.example
+
+# Chaves e certificados
 wireguard/keys/*.key
 wireguard/keys/*.pub
+*.pem
+*.p12
+id_rsa
+id_ed25519
 
 # Temporários
 /tmp/
