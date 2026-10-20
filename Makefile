@@ -1,7 +1,7 @@
 # Atalhos do Rede Lab
 SHELL := /bin/bash
 
-.PHONY: help network deploy vpn vpn-status vpn-test ssh doctor destroy clean
+.PHONY: help network deploy vpn vpn-status vpn-test ssh doctor guard hooks destroy clean
 
 help:
 	@echo "Rede Lab - alvos disponíveis:"
@@ -12,6 +12,8 @@ help:
 	@echo "  make vpn-test    - testa ping/SSH pelo túnel"
 	@echo "  make ssh         - testa SSH casa -> servidor"
 	@echo "  make doctor      - diagnostica dependências e saúde"
+	@echo "  make guard       - verifica se há .env/segredos rastreados"
+	@echo "  make hooks       - instala o hook de pre-commit"
 	@echo "  make destroy     - derruba o lab"
 	@echo "  make clean       - derruba e remove imagens locais"
 
@@ -35,6 +37,14 @@ ssh:
 
 doctor:
 	./scripts/doctor.sh
+
+guard:
+	./scripts/guard.sh
+
+hooks:
+	chmod +x .githooks/pre-commit scripts/guard.sh
+	git config core.hooksPath .githooks
+	@echo "Hook de pre-commit instalado (core.hooksPath=.githooks)."
 
 destroy:
 	./scripts/destroy.sh
