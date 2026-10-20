@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Guia rápido para entrar nos containers isp, casa e servidor do Rede Lab usando Podman, Docker ou Compose.">
+  <title>Acesso aos containers — Rede Lab</title>
+  <style>
+    :root {
+      --bg: #080d18;
+      --surface: #111a2e;
+      --surface-2: #16213a;
+      --border: #26324d;
+      --border-soft: #1c2740;
+      --text: #e8eefb;
+      --muted: #9aa8c2;
+      --faint: #6f7f9c;
+      --accent: #5eead4;
+      --accent-2: #60a5fa;
+      --accent-3: #f59e0b;
+      --danger: #fb7185;
+      --success: #34d399;
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 24px;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(900px 500px at 12% -8%, rgba(96, 165, 250, .16), transparent 60%),
+        radial-gradient(800px 500px at 88% 0%, rgba(94, 234, 212, .10), transparent 58%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    a:hover { color: #a7f3e8; }
+
+    code, pre, kbd { font-family: var(--mono); }
+
+    code {
+      font-size: .92em;
+      color: #c7f9f1;
+      background: rgba(94, 234, 212, .08);
+      border: 1px solid rgba(94, 234, 212, .14);
+      padding: .12em .38em;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    pre code {
+      background: none;
+      border: 0;
+      padding: 0;
+      color: inherit;
+      white-space: pre;
+    }
+
+    .wrap {
+      width: min(1140px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .skip-link {
+      position: absolute;
+      left: 16px;
+      top: -60px;
+      z-index: 100;
+      background: var(--accent);
+      color: #042f2e;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 700;
+      transition: top .2s ease;
+    }
+
+    .skip-link:focus { top: 16px; }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border-soft);
+      background:
+        linear-gradient(180deg, rgba(13, 21, 38, .66), rgba(8, 13, 24, .2)),
+        radial-gradient(700px 300px at 50% 0%, rgba(96, 165, 250, .14), transparent 70%);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, .045) 1px, transparent 1px);
+      background-size: 44px 44px;
+      -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,.85), transparent 90%);
+      mask-image: linear-gradient(180deg, rgba(0,0,0,.85), transparent 90%);
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      padding: 72px 0 34px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.4rem, 6vw, 4.6rem);
+      line-height: 1.03;
+      letter-spacing: -.045em;
+    }
+
+    .grad {
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .lede {
+      max-width: 780px;
+      margin: 20px 0 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.6vw, 1.18rem);
+    }
+
+    .hero-command {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 26px;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      background: #070c16;
+      border-radius: 12px;
+      font-family: var(--mono);
+      font-size: clamp(.76rem, 1.4vw, .92rem);
+      box-shadow: 0 12px 30px rgba(0,0,0,.2);
+    }
+
+    .hero-command .prompt { color: var(--accent); font-weight: 800; }
+    .hero-command .hl { color: var(--accent-3); }
+
+    .engine-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    .engine-switch {
+      display: inline-flex;
+      gap: 3px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      background: rgba(17, 26, 46, .8);
+      border-radius: 999px;
+    }
+
+    .engine-switch button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 15px;
+      font: 700 .8rem/1 var(--sans);
+      cursor: pointer;
+      transition: color .18s ease, background .18s ease;
+    }
+
+    .engine-switch button:hover { color: var(--text); }
+
+    .engine-switch button[aria-pressed="true"] {
+      color: #042f2e;
+      background: var(--accent);
+      box-shadow: 0 0 0 3px rgba(94, 234, 212, .12);
+    }
+
+    .engine-status {
+      margin: 0;
+      color: var(--faint);
+      font-size: .82rem;
+    }
+
+    .engine-status strong { color: var(--muted); }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 24px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--border);
+      background: rgba(17, 26, 46, .72);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 5px 11px;
+      font-size: .76rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+
+    .badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(94, 234, 212, .7);
+    }
+
+    .badge.blue::before { background: var(--accent-2); box-shadow: 0 0 10px rgba(96, 165, 250, .7); }
+    .badge.amber::before { background: var(--accent-3); box-shadow: 0 0 10px rgba(245, 158, 11, .7); }
+
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 34px;
+      padding-top: 22px;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .toc a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: .82rem;
+      font-weight: 650;
+      border: 1px solid var(--border-soft);
+      background: rgba(17, 26, 46, .55);
+      padding: 6px 11px;
+      border-radius: 9px;
+      transition: border-color .18s ease, color .18s ease, background .18s ease;
+    }
+
+    .toc a:hover {
+      color: var(--text);
+      border-color: rgba(94, 234, 212, .4);
+      background: rgba(94, 234, 212, .06);
+    }
+
+    /* ---------- Sections ---------- */
+    main { padding: 12px 0 80px; }
+
+    .section {
+      padding: 54px 0 8px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .section:last-of-type { border-bottom: 0; }
+
+    .section-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .section-num {
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      margin-top: 4px;
+      border: 1px solid rgba(94, 234, 212, .3);
+      background: rgba(94, 234, 212, .08);
+      color: var(--accent);
+      border-radius: 11px;
+      font-family: var(--mono);
+      font-size: .9rem;
+      font-weight: 700;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      letter-spacing: -.025em;
+      line-height: 1.2;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      letter-spacing: -.01em;
+    }
+
+    h4 {
+      margin: 18px 0 8px;
+      color: var(--muted);
+      font-size: .76rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .section-sub {
+      margin: 7px 0 0;
+      color: var(--muted);
+      max-width: 850px;
+    }
+
+    p { margin: 0 0 14px; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); }
+
+    /* ---------- Grid / cards ---------- */
+    .grid { display: grid; gap: 16px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    .card {
+      background: linear-gradient(180deg, rgba(22, 33, 58, .82), rgba(17, 26, 46, .82));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .12);
+    }
+
+    .card p:last-child { margin-bottom: 0; }
+
+    .stat {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat::after {
+      content: "";
+      position: absolute;
+      right: -30px;
+      top: -40px;
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(94, 234, 212, .18), transparent 65%);
+      pointer-events: none;
+    }
+
+    .stat-kicker {
+      display: block;
+      color: var(--faint);
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      margin: 5px 0 2px;
+      font-size: 1.9rem;
+      line-height: 1.1;
+      letter-spacing: -.04em;
+    }
+
+    .stat p { color: var(--muted); font-size: .9rem; }
+
+    .instance-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(96, 165, 250, .3);
+      background: rgba(96, 165, 250, .09);
+      color: #bfdbfe;
+      border-radius: 8px;
+      padding: 4px 9px;
+      font-family: var(--mono);
+      font-size: .76rem;
+      font-weight: 700;
+    }
+
+    .ip {
+      color: var(--faint);
+      font-family: var(--mono);
+      font-size: .76rem;
+    }
+
+    .instance-card h3 { margin-bottom: 6px; }
+    .instance-card > p { font-size: .9rem; }
+
+    /* ---------- Code blocks ---------- */
+    .code-block {
+      position: relative;
+      margin: 14px 0;
+      background: #070c16;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .code-block::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      opacity: .75;
+      z-index: 1;
+    }
+
+    .code-block .bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-soft);
+      background: #0b1220;
+    }
+
+    .dots {
+      display: inline-flex;
+      gap: 5px;
+    }
+
+    .dots i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #32415f;
+    }
+
+    .dots i:first-child { background: #fb7185; }
+    .dots i:nth-child(2) { background: #f59e0b; }
+    .dots i:nth-child(3) { background: #34d399; }
+
+    .bar-title {
+      color: var(--faint);
+      font-family: var(--mono);
+      font-size: .7rem;
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 16px 58px 16px 20px;
+      overflow-x: auto;
+      color: #d7e3f8;
+      font-size: .84rem;
+      line-height: 1.7;
+      tab-size: 2;
+    }
+
+    .code-block.compact pre {
+      padding-top: 13px;
+      padding-bottom: 13px;
+      font-size: .76rem;
+      line-height: 1.65;
+    }
+
+    .code-block.compact .bar { padding: 7px 11px; }
+
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 9px;
+      z-index: 3;
+      border: 1px solid var(--border);
+      background: #101a2e;
+      color: var(--muted);
+      border-radius: 7px;
+      padding: 5px 9px;
+      font: 700 .72rem/1 var(--sans);
+      cursor: pointer;
+      transition: color .18s ease, border-color .18s ease, background .18s ease;
+    }
+
+    .copy-btn:hover {
+      color: var(--accent);
+      border-color: rgba(94, 234, 212, .45);
+      background: rgba(94, 234, 212, .07);
+    }
+
+    .copy-btn.copied {
+      color: #042f2e;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .engine-word {
+      color: #fcd34d;
+      font-weight: 700;
+    }
+
+    .copy-btn:focus-visible,
+    .engine-switch button:focus-visible,
+    .toc a:focus-visible,
+    .skip-link:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    /* ---------- Tables ---------- */
+    .table-wrap {
+      margin: 16px 0;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(17, 26, 46, .55);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+      min-width: 640px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    th {
+      background: rgba(22, 33, 58, .9);
+      color: var(--text);
+      font-size: .76rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: rgba(96, 165, 250, .035); }
+
+    /* ---------- Callouts / FAQ ---------- */
+    .callout {
+      margin: 18px 0;
+      padding: 15px 17px 15px 18px;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent-2);
+      border-radius: 10px;
+      background: rgba(96, 165, 250, .06);
+      color: var(--muted);
+      font-size: .92rem;
+    }
+
+    .callout strong { color: var(--text); }
+    .callout.warn { border-left-color: var(--accent-3); background: rgba(245, 158, 11, .06); }
+    .callout.success { border-left-color: var(--success); background: rgba(52, 211, 153, .06); }
+    .callout.danger { border-left-color: var(--danger); background: rgba(251, 113, 133, .06); }
+
+    .faq {
+      margin: 10px 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(17, 26, 46, .62);
+      overflow: hidden;
+    }
+
+    .faq summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 16px;
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 700;
+      list-style: none;
+    }
+
+    .faq summary::-webkit-details-marker { display: none; }
+
+    .faq summary::after {
+      content: "+";
+      flex: 0 0 auto;
+      color: var(--accent);
+      font-size: 1.1rem;
+      font-weight: 800;
+    }
+
+    .faq[open] summary::after { content: "−"; }
+    .faq[open] summary { border-bottom: 1px solid var(--border-soft); }
+
+    .faq-body {
+      padding: 14px 16px 16px;
+      color: var(--muted);
+      font-size: .92rem;
+    }
+
+    .faq-body p:last-child { margin-bottom: 0; }
+
+    kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: .8em;
+    }
+
+    /* ---------- Footer ---------- */
+    footer {
+      border-top: 1px solid var(--border-soft);
+      background: rgba(6, 10, 20, .55);
+      padding: 30px 0 40px;
+      color: var(--faint);
+      font-size: .86rem;
+    }
+
+    .footer-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+    }
+
+    .footer-links a { color: var(--muted); }
+    .footer-links a:hover { color: var(--accent); }
+
+    .top-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .top-link:hover { color: var(--accent); }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 960px) {
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      .wrap { width: min(100% - 26px, 1140px); }
+      .hero-inner { padding-top: 48px; }
+      .section { padding-top: 42px; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .hero-command {
+        display: flex;
+        width: 100%;
+        overflow-x: auto;
+      }
+      .section-head { gap: 10px; }
+      .section-num { width: 32px; height: 32px; font-size: .8rem; }
+      .code-block pre { padding-left: 15px; font-size: .78rem; }
+      .code-block.compact pre { font-size: .74rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+      }
+    }
+
+    @media print {
+      body { background: #fff; color: #111; }
+      .hero { background: none; border-bottom: 1px solid #ccc; }
+      .hero::after, .toc, .copy-btn, .engine-row, .skip-link, .top-link { display: none !important; }
+      .card, .code-block, .table-wrap, .faq, .callout {
+        background: #fff !important;
+        color: #111 !important;
+        border-color: #bbb !important;
+        box-shadow: none !important;
+      }
+      .section { break-inside: avoid; }
+      a { color: #0645ad; }
+      code { color: #111; background: #f3f4f6; border-color: #ddd; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="hero">
+    <div class="wrap hero-inner">
+      <p class="eyebrow">Rede Lab · guia rápido</p>
+      <h1>Acesso aos <span class="grad">containers</span></h1>
+      <p class="lede">
+        Como entrar no CT de cada instância do lab — <code>isp</code>, <code>casa</code> e
+        <code>servidor</code> — usando Podman, Docker ou o wrapper de Compose.
+      </p>
+      <div class="hero-command" aria-label="Exemplo de comando">
+        <span class="prompt" aria-hidden="true">$</span>
+        <code><span class="engine-word">podman</span> exec -it <span class="hl">isp</span> bash</code>
+      </div>
+      <div class="engine-row">
+        <div class="engine-switch" role="group" aria-label="Selecionar engine">
+          <button type="button" data-engine="podman" aria-pressed="true">Podman</button>
+          <button type="button" data-engine="docker" aria-pressed="false">Docker</button>
+        </div>
+        <p class="engine-status" id="engine-status" aria-live="polite">Comandos exibidos para <strong>Podman</strong>.</p>
+      </div>
+      <div class="badges" aria-label="Resumo">
+        <span class="badge">3 containers</span>
+        <span class="badge blue">nomes fixos</span>
+        <span class="badge amber">root por padrão</span>
+        <span class="badge">labuser no servidor</span>
+      </div>
+      <nav class="toc" aria-label="Índice da página">
+        <a href="#visao-geral">Visão geral</a>
+        <a href="#entrar">Entrar</a>
+        <a href="#por-instancia">Por instância</a>
+        <a href="#compose">Compose</a>
+        <a href="#labuser">labuser</a>
+        <a href="#inspecao">Inspeção</a>
+        <a href="#iniciar">Iniciar/parar</a>
+        <a href="#vpn">VPN</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+        <a href="#referencia">Referência</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="conteudo" class="wrap">
+    <!-- ================= 1. VISÃO GERAL ================= -->
+    <section class="section" id="visao-geral" aria-labelledby="titulo-visao">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">01</span>
+        <div>
+          <h2 id="titulo-visao">Visão geral</h2>
+          <p class="section-sub">
+            O Compose define <code>container_name</code> fixo. Por isso os nomes são sempre
+            <code>isp</code>, <code>casa</code> e <code>servidor</code>, sem o prefixo do projeto.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-3">
+        <article class="card stat">
+          <span class="stat-kicker">Instâncias</span>
+          <strong>3</strong>
+          <p>ISP, casa e servidor, todos na bridge <code>lab-net</code>.</p>
+        </article>
+        <article class="card stat">
+          <span class="stat-kicker">Nomes</span>
+          <strong>fixos</strong>
+          <p>Definidos em <code>docker-compose.yml</code> via <code>container_name</code>.</p>
+        </article>
+        <article class="card stat">
+          <span class="stat-kicker">Acesso</span>
+          <strong>root</strong>
+          <p>O <code>exec</code> padrão entra como root; <code>labuser</code> só no servidor.</p>
+        </article>
+      </div>
+
+      <h3>Conferir o status</h3>
+      <div class="code-block">
+        <div class="bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="bar-title">status dos containers</span></div>
+        <button class="copy-btn" type="button" aria-label="Copiar comandos de status">Copiar</button>
+        <pre><code><span class="engine-word">podman</span> ps --format 'table {{.Names}}\t{{.Status}}'
+./scripts/compose.sh ps</code></pre>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Instância</th>
+              <th>Container</th>
+              <th>IP</th>
+              <th>Função</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ISP / NAT</td>
+              <td><code>isp</code></td>
+              <td><code>10.0.0.1</code></td>
+              <td>Gateway, forwarding e MASQUERADE.</td>
+            </tr>
+            <tr>
+              <td>Casa</td>
+              <td><code>casa</code></td>
+              <td><code>10.0.0.10</code></td>
+              <td>Cliente SSH e WireGuard (<code>wg1</code>).</td>
+            </tr>
+            <tr>
+              <td>Servidor</td>
+              <td><code>servidor</code></td>
+              <td><code>10.0.0.20</code></td>
+              <td>sshd e servidor WireGuard (<code>wg0</code>).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <strong>Se um container não aparecer:</strong> veja todos com
+        <code><span class="engine-word">podman</span> ps -a</code> e inicie com
+        <code><span class="engine-word">podman</span> start &lt;nome&gt;</code>.
+        Se ele foi removido, recrie com <code>./scripts/compose.sh up</code>.
+      </div>
+    </section>
+
+    <!-- ================= 2. ENTRAR ================= -->
+    <section class="section" id="entrar" aria-labelledby="titulo-entrar">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">02</span>
+        <div>
+          <h2 id="titulo-entrar">Entrar em cada CT</h2>
+          <p class="section-sub">
+            O comando é o mesmo para todos; muda apenas o nome do container.
+            <code>-it</code> significa interativo + TTY.
+          </p>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="bar-title">shell interativo</span></div>
+        <button class="copy-btn" type="button" aria-label="Copiar comandos para entrar nos containers">Copiar</button>
+        <pre><code><span class="engine-word">podman</span> exec -it isp bash
+<span class="engine-word">podman</span> exec -it casa bash
+<span class="engine-word">podman</span> exec -it servidor bash</code></pre>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Instância</th>
+              <th>Comando</th>
+              <th>Observação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ISP / NAT</td>
+              <td><code><span class="engine-word">podman</span> exec -it isp bash</code></td>
+              <td>Use para inspecionar NAT e rotas.</td>
+            </tr>
+            <tr>
+              <td>Casa</td>
+              <td><code><span class="engine-word">podman</span> exec -it casa bash</code></td>
+              <td>Use para testar SSH e WireGuard.</td>
+            </tr>
+            <tr>
+              <td>Servidor</td>
+              <td><code><span class="engine-word">podman</span> exec -it servidor bash</code></td>
+              <td>Use para ver sshd, portas e <code>wg0</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="callout success">
+          <strong>Comando único:</strong> omita o <code>-it</code> para rodar sem shell.
+          Exemplo: <code><span class="engine-word">podman</span> exec casa ip route</code>.
+        </div>
+        <div class="callout warn">
+          <strong>Bash ausente?</strong> Se a imagem não tiver <code>bash</code>, use
+          <code><span class="engine-word">podman</span> exec -it isp sh</code>.
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Para sair:</strong> digite <code>exit</code> ou pressione <kbd>Ctrl</kbd> +
+        <kbd>D</kbd>. Isso encerra apenas o shell do <code>exec</code>, não o container.
+      </div>
+    </section>
+
+    <!-- ================= 3. POR INSTÂNCIA ================= -->
+    <section class="section" id="por-instancia" aria-labelledby="titulo-instancia">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">03</span>
+        <div>
+          <h2 id="titulo-instancia">Por instância</h2>
+          <p class="section-sub">
+            Comandos prontos para entrar e inspecionar cada container.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-3">
+        <article class="card instance-card">
+          <div class="instance-head">
+            <span class="chip">isp</span>
+            <span class="ip">10.0.0.1</span>
+          </div>
+          <h3>ISP / NAT</h3>
+          <p class="muted">O roteador containerizado que aplica forwarding e MASQUERADE.</p>
+          <h4>Entrar</h4>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comando para entrar no isp">Copiar</button>
+            <pre><code><span class="engine-word">podman</span> exec -it isp bash</code></pre>
+          </div>
+          <h4>Inspecionar</h4>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comandos de inspeção do isp">Copiar</button>
+            <pre><code>ip -brief addr
+ip route
+iptables -t nat -L POSTROUTING -n -v
+iptables -L FORWARD -n -v</code></pre>
+          </div>
+        </article>
+
+        <article class="card instance-card">
+          <div class="instance-head">
+            <span class="chip">casa</span>
+            <span class="ip">10.0.0.10</span>
+          </div>
+          <h3>Casa</h3>
+          <p class="muted">Cliente SSH e WireGuard. É daqui que saem os testes para o servidor.</p>
+          <h4>Entrar</h4>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comando para entrar na casa">Copiar</button>
+            <pre><code><span class="engine-word">podman</span> exec -it casa bash</code></pre>
+          </div>
+          <h4>Inspecionar</h4>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comandos de inspeção da casa">Copiar</button>
+            <pre><code>ip -brief addr
+ip route
+wg show
+ssh labuser@10.0.99.1</code></pre>
+          </div>
+        </article>
+
+        <article class="card instance-card">
+          <div class="instance-head">
+            <span class="chip">servidor</span>
+            <span class="ip">10.0.0.20</span>
+          </div>
+          <h3>Servidor</h3>
+          <p class="muted">Executa o sshd e o endpoint WireGuard na porta <code>51820/udp</code>.</p>
+          <h4>Entrar</h4>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comando para entrar no servidor">Copiar</button>
+            <pre><code><span class="engine-word">podman</span> exec -it servidor bash</code></pre>
+          </div>
+          <h4>Inspecionar</h4>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comandos de inspeção do servidor">Copiar</button>
+            <pre><code>ip -brief addr
+ip route
+wg show
+ss -lntp</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ================= 4. COMPOSE ================= -->
+    <section class="section" id="compose" aria-labelledby="titulo-compose">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">04</span>
+        <div>
+          <h2 id="titulo-compose">Via Compose</h2>
+          <p class="section-sub">
+            Se o lab foi criado com <code>./scripts/compose.sh up</code>, use o wrapper para
+            executar comandos sem se preocupar com o engine.
+          </p>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="bar-title">compose.sh exec</span></div>
+        <button class="copy-btn" type="button" aria-label="Copiar comandos do Compose">Copiar</button>
+        <pre><code>./scripts/compose.sh exec isp bash
+./scripts/compose.sh exec casa bash
+./scripts/compose.sh exec servidor bash</code></pre>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="callout success">
+          <strong>Vantagem:</strong> o wrapper detecta <code>podman-compose</code>,
+          <code>podman compose</code> ou <code>docker compose</code> automaticamente.
+        </div>
+        <div class="callout">
+          <strong>Comando único:</strong>
+          <code>./scripts/compose.sh exec casa wg show</code>.
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cenário</th>
+              <th>Comando</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Container já em execução</td>
+              <td><code><span class="engine-word">podman</span> exec -it &lt;container&gt; bash</code></td>
+            </tr>
+            <tr>
+              <td>Lab criado via Compose</td>
+              <td><code>./scripts/compose.sh exec &lt;container&gt; bash</code></td>
+            </tr>
+            <tr>
+              <td>Usando Docker</td>
+              <td><code>docker exec -it &lt;container&gt; bash</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warn">
+        <strong>Não misture:</strong> se o container foi criado pelo Compose, o
+        <code>podman exec</code> continua funcionando, mas o caminho consistente é
+        <code>./scripts/compose.sh exec</code>. O wrapper também funciona para
+        <code>ps</code>, <code>logs</code>, <code>start</code> e <code>stop</code>.
+      </div>
+    </section>
+
+    <!-- ================= 5. LABUSER ================= -->
+    <section class="section" id="labuser" aria-labelledby="titulo-labuser">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">05</span>
+        <div>
+          <h2 id="titulo-labuser">Entrar como <code>labuser</code></h2>
+          <p class="section-sub">
+            Por padrão, o <code>exec</code> entra como root. No servidor, o usuário
+            <code>labuser</code> existe e pode ser usado explicitamente.
+          </p>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="bar-title">usuário não-root</span></div>
+        <button class="copy-btn" type="button" aria-label="Copiar comandos com labuser">Copiar</button>
+        <pre><code><span class="engine-word">podman</span> exec -it --user labuser servidor bash
+<span class="engine-word">podman</span> exec --user labuser servidor id
+<span class="engine-word">podman</span> exec --user labuser servidor sh -c 'whoami; pwd'</code></pre>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="callout success">
+          <strong>Onde existe:</strong> apenas no container <code>servidor</code>, criado no
+          <code>servidor/Dockerfile</code> com shell <code>/bin/bash</code>.
+        </div>
+        <div class="callout warn">
+          <strong>Onde não existe:</strong> na <code>casa</code> e no <code>isp</code>.
+          Use o usuário padrão (root) ou crie o usuário se precisar.
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Não confunda:</strong> <code>ssh labuser@10.0.99.1</code> entra pelo sshd,
+        com autenticação e sessão SSH. <code>podman exec --user labuser</code> executa um
+        processo diretamente no container, sem passar pelo sshd.
+      </div>
+    </section>
+
+    <!-- ================= 6. INSPEÇÃO ================= -->
+    <section class="section" id="inspecao" aria-labelledby="titulo-inspecao">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">06</span>
+        <div>
+          <h2 id="titulo-inspecao">Inspeção rápida</h2>
+          <p class="section-sub">
+            Comandos de uma linha para checar o estado de cada parte do lab.
+          </p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Quero ver</th>
+              <th>Comando</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>IPs da casa</td>
+              <td><code><span class="engine-word">podman</span> exec casa ip -brief addr</code></td>
+            </tr>
+            <tr>
+              <td>Rotas da casa</td>
+              <td><code><span class="engine-word">podman</span> exec casa ip route</code></td>
+            </tr>
+            <tr>
+              <td>WireGuard da casa</td>
+              <td><code><span class="engine-word">podman</span> exec casa wg show</code></td>
+            </tr>
+            <tr>
+              <td>Portas abertas no servidor</td>
+              <td><code><span class="engine-word">podman</span> exec servidor ss -lntp</code></td>
+            </tr>
+            <tr>
+              <td>NAT do ISP</td>
+              <td><code><span class="engine-word">podman</span> exec isp iptables -t nat -L POSTROUTING -n -v</code></td>
+            </tr>
+            <tr>
+              <td>Logs do servidor</td>
+              <td><code><span class="engine-word">podman</span> logs -f servidor</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <strong>Dica:</strong> para comandos únicos, não use <code>-it</code>. Isso evita o erro
+        de TTY ao rodar dentro de scripts, CI ou pipes.
+      </div>
+    </section>
+
+    <!-- ================= 7. INICIAR / PARAR ================= -->
+    <section class="section" id="iniciar" aria-labelledby="titulo-iniciar">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">07</span>
+        <div>
+          <h2 id="titulo-iniciar">Iniciar, parar e ver logs</h2>
+          <p class="section-sub">
+            Se o container estiver parado, o <code>exec</code> falha. Inicie antes de entrar.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div>
+          <h3>Engine direto</h3>
+          <div class="code-block">
+            <div class="bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="bar-title">ciclo de vida</span></div>
+            <button class="copy-btn" type="button" aria-label="Copiar comandos de ciclo de vida">Copiar</button>
+            <pre><code><span class="engine-word">podman</span> ps -a
+<span class="engine-word">podman</span> start isp
+<span class="engine-word">podman</span> stop isp
+<span class="engine-word">podman</span> restart isp
+<span class="engine-word">podman</span> logs -f isp</code></pre>
+          </div>
+        </div>
+        <div>
+          <h3>Compose</h3>
+          <div class="code-block">
+            <div class="bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="bar-title">compose.sh</span></div>
+            <button class="copy-btn" type="button" aria-label="Copiar comandos de ciclo de vida via Compose">Copiar</button>
+            <pre><code>./scripts/compose.sh start
+./scripts/compose.sh stop
+./scripts/compose.sh restart
+./scripts/compose.sh logs servidor</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong>Container removido:</strong> <code>podman start</code> não recria um container
+        que não existe. Nesse caso, use <code>./scripts/compose.sh up</code> ou
+        <code>./scripts/deploy.sh</code>.
+      </div>
+    </section>
+
+    <!-- ================= 8. VPN ================= -->
+    <section class="section" id="vpn" aria-labelledby="titulo-vpn">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">08</span>
+        <div>
+          <h2 id="titulo-vpn">E a “instância” da VPN?</h2>
+          <p class="section-sub">
+            A VPN não é um container separado. São interfaces dentro da casa e do servidor.
+          </p>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="bar-title">inspecionar a VPN</span></div>
+        <button class="copy-btn" type="button" aria-label="Copiar comandos de inspeção da VPN">Copiar</button>
+        <pre><code>./scripts/vpn.sh status
+<span class="engine-word">podman</span> exec casa wg show
+<span class="engine-word">podman</span> exec servidor wg show</code></pre>
+      </div>
+
+      <div class="callout">
+        <strong>Como funciona:</strong> a casa tem <code>wg1</code> em <code>10.0.99.10</code>;
+        o servidor tem <code>wg0</code> em <code>10.0.99.1:51820/udp</code>. Para “entrar na VPN”,
+        entre no CT da casa ou do servidor e rode <code>wg show</code>.
+      </div>
+
+      <p class="muted">
+        Detalhes em <a href="wireguard.md">docs/wireguard.md</a> e
+        <a href="vpn-operacao.md">docs/vpn-operacao.md</a>.
+      </p>
+    </section>
+
+    <!-- ================= 9. TROUBLESHOOTING ================= -->
+    <section class="section" id="troubleshooting" aria-labelledby="titulo-troubleshooting">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">09</span>
+        <div>
+          <h2 id="titulo-troubleshooting">Troubleshooting</h2>
+          <p class="section-sub">
+            Problemas comuns ao entrar nos containers.
+          </p>
+        </div>
+      </div>
+
+      <details class="faq">
+        <summary>“no such container: isp”</summary>
+        <div class="faq-body">
+          <p>O container não existe ou está parado. Veja todos e inicie:</p>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comandos para container inexistente">Copiar</button>
+            <pre><code><span class="engine-word">podman</span> ps -a
+<span class="engine-word">podman</span> start isp</code></pre>
+          </div>
+          <p>Se ele foi removido, recrie o lab com <code>./scripts/compose.sh up</code>.</p>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>“exec: bash: executable file not found in $PATH”</summary>
+        <div class="faq-body">
+          <p>A imagem não tem <code>bash</code>. Use <code>sh</code>:</p>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comando com sh">Copiar</button>
+            <pre><code><span class="engine-word">podman</span> exec -it isp sh</code></pre>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>“the input device is not a TTY”</summary>
+        <div class="faq-body">
+          <p>O <code>-it</code> exige um terminal interativo. Em scripts, CI ou pipes, remova o <code>-t</code> (ou ambos):</p>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comando sem TTY">Copiar</button>
+            <pre><code><span class="engine-word">podman</span> exec casa ip route
+<span class="engine-word">podman</span> exec -i casa sh -c 'cat /etc/os-release'</code></pre>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>“permission denied” ao usar <code>--user labuser</code></summary>
+        <div class="faq-body">
+          <p>O usuário existe apenas no container <code>servidor</code>. Confirme com:</p>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar comando para verificar usuário">Copiar</button>
+            <pre><code><span class="engine-word">podman</span> exec servidor id labuser</code></pre>
+          </div>
+          <p>Na <code>casa</code> e no <code>isp</code>, use o usuário padrão (root).</p>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>“nenhum Compose encontrado” no <code>compose.sh</code></summary>
+        <div class="faq-body">
+          <p>Instale <code>podman-compose</code> ou <code>docker compose</code>, ou force o binário no <code>.env</code>:</p>
+          <div class="code-block compact">
+            <button class="copy-btn" type="button" aria-label="Copiar configuração do COMPOSE_BIN">Copiar</button>
+            <pre><code>COMPOSE_BIN=podman-compose
+# ou
+COMPOSE_BIN=docker compose</code></pre>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ================= 10. REFERÊNCIA ================= -->
+    <section class="section" id="referencia" aria-labelledby="titulo-referencia">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">10</span>
+        <div>
+          <h2 id="titulo-referencia">Referência rápida</h2>
+          <p class="section-sub">
+            Cheat sheet para copiar e colar.
+          </p>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="bar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="bar-title">cheat sheet</span></div>
+        <button class="copy-btn" type="button" aria-label="Copiar cheat sheet">Copiar</button>
+        <pre><code># entrar
+<span class="engine-word">podman</span> exec -it isp bash
+<span class="engine-word">podman</span> exec -it casa bash
+<span class="engine-word">podman</span> exec -it servidor bash
+
+# comando único
+<span class="engine-word">podman</span> exec isp ip route
+<span class="engine-word">podman</span> exec casa wg show
+<span class="engine-word">podman</span> exec servidor ss -lntp
+
+# status e logs
+<span class="engine-word">podman</span> ps
+<span class="engine-word">podman</span> logs -f servidor
+<span class="engine-word">podman</span> start casa
+
+# compose
+./scripts/compose.sh exec casa bash
+./scripts/compose.sh ps
+
+# labuser (somente servidor)
+<span class="engine-word">podman</span> exec -it --user labuser servidor bash</code></pre>
+      </div>
+
+      <div class="callout success">
+        <strong>Resumo:</strong> para o dia a dia, use
+        <code>./scripts/compose.sh exec &lt;container&gt; bash</code> se o lab foi criado via
+        Compose, ou <code><span class="engine-word">podman</span> exec -it &lt;container&gt; bash</code>
+        se estiver usando o engine diretamente.
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-grid">
+      <div>
+        <p style="margin:0 0 6px; color: var(--muted); font-weight: 700;">Rede Lab · Acesso aos containers</p>
+        <p style="margin:0;">Página estática em HTML, CSS e JavaScript puros. Sem frameworks, sem CDN.</p>
+      </div>
+      <div class="footer-links" aria-label="Links relacionados">
+        <a href="../README.md">README</a>
+        <a href="nat.html">Camada de NAT</a>
+        <a href="topologia.md">Topologia</a>
+        <a href="compose.md">Compose</a>
+        <a href="https://github.com/dionarley/rede-lab">GitHub</a>
+        <a class="top-link" href="#conteudo">↑ topo</a>
+      </div>
+    </div>
+    <div class="wrap" style="margin-top:18px; color: var(--faint);">
+      © <span id="year">2026</span> Rede Lab. Use o seletor para alternar entre Podman e Docker.
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      "use strict";
+
+      const engineButtons = Array.from(document.querySelectorAll('[data-engine]'));
+      const engineWords = Array.from(document.querySelectorAll('.engine-word'));
+      const engineStatus = document.getElementById('engine-status');
+      const storageKey = 'rede-lab-engine';
+
+      function setEngine(engine) {
+        const selected = engine === 'docker' ? 'docker' : 'podman';
+        engineWords.forEach(function (word) {
+          word.textContent = selected;
+        });
+        engineButtons.forEach(function (button) {
+          button.setAttribute('aria-pressed', String(button.dataset.engine === selected));
+        });
+        if (engineStatus) {
+          const label = selected === 'docker' ? 'Docker' : 'Podman';
+          engineStatus.innerHTML = 'Comandos exibidos para <strong>' + label + '</strong>.';
+        }
+        try {
+          localStorage.setItem(storageKey, selected);
+        } catch (error) {
+          /* localStorage pode estar bloqueado; o seletor continua funcionando. */
+        }
+      }
+
+      engineButtons.forEach(function (button) {
+        button.addEventListener('click', function () {
+          setEngine(button.dataset.engine);
+        });
+      });
+
+      let savedEngine = 'podman';
+      try {
+        savedEngine = localStorage.getItem(storageKey) || 'podman';
+      } catch (error) {
+        savedEngine = 'podman';
+      }
+      setEngine(savedEngine);
+
+      function bindCopyButtons(root) {
+        root.querySelectorAll('.copy-btn').forEach(function (button) {
+          if (button.dataset.bound === 'true') return;
+          button.dataset.bound = 'true';
+          button.addEventListener('click', function () {
+            const block = button.closest('.code-block');
+            const code = block ? block.querySelector('code') : null;
+            if (!code) return;
+            copyText(code.textContent.trim()).then(function () {
+              const original = button.textContent;
+              button.textContent = 'Copiado!';
+              button.classList.add('copied');
+              window.setTimeout(function () {
+                button.textContent = original;
+                button.classList.remove('copied');
+              }, 1400);
+            }).catch(function () {
+              button.textContent = 'Falhou';
+              window.setTimeout(function () {
+                button.textContent = 'Copiar';
+              }, 1400);
+            });
+          });
+        });
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          return navigator.clipboard.writeText(text);
+        }
+        return new Promise(function (resolve, reject) {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.top = '-1000px';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            const ok = document.execCommand('copy');
+            textarea.remove();
+            ok ? resolve() : reject(new Error('copy failed'));
+          } catch (error) {
+            textarea.remove();
+            reject(error);
+          }
+        });
+      }
+
+      bindCopyButtons(document);
+
+      const year = document.getElementById('year');
+      if (year) year.textContent = String(new Date().getFullYear());
+    }());
+  </script>
+</body>
+</html>
