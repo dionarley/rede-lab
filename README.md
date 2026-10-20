@@ -147,6 +147,8 @@ Detalhes em [`testes/resultado-ssh.txt`](testes/resultado-ssh.txt) e
 - [`docs/topologia.md`](docs/topologia.md)
 - [`docs/ssh.md`](docs/ssh.md)
 - [`docs/wireguard.md`](docs/wireguard.md)
+- [`docs/vpn-operacao.md`](docs/vpn-operacao.md)
+- [`docs/engines.md`](docs/engines.md)
 
 ## 🔐 Segurança
 
