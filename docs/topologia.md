@@ -59,6 +59,8 @@ flowchart LR
 ### ISP / Gateway (container `isp`)
 - Função: gateway, NAT (MASQUERADE) e IP forwarding.
 - Endereço: `10.0.0.1/24` (rede bridge `lab-net`).
+- A bridge usa `10.0.0.254` como IP reservado de gateway; o gateway
+  lógico da rede é o ISP em `10.0.0.1`.
 - Encaminha o tráfego entre `casa` e `servidor`.
 - Em Podman rootless, o `iptables` pode não carregar módulos do kernel;
   nesse caso o NAT é apenas conceitual e a comunicação direta pela bridge

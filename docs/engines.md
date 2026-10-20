@@ -42,6 +42,12 @@ CONTAINER_ENGINE=podman ./scripts/deploy.sh
 CONTAINER_ENGINE=docker ./scripts/deploy.sh
 ```
 
+## Compose
+
+Além dos scripts nativos, o lab tem `docker-compose.yml` e o wrapper
+`scripts/compose.sh`, que funciona com Docker Compose, `podman compose`
+e `podman-compose`. Veja [`compose.md`](compose.md).
+
 ## Observação sobre rootless
 
 Em Podman rootless, `ping` pode falhar com `Operation not permitted`
