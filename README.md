@@ -120,7 +120,13 @@ SSH_VIA_WG_OK
 labuser
 ```
 
-### 4. Derrubar tudo
+### 4. Diagnóstico
+
+```bash
+./scripts/doctor.sh
+```
+
+### 5. Derrubar tudo
 
 ```bash
 ./scripts/destroy.sh
@@ -147,6 +153,8 @@ Detalhes em [`testes/resultado-ssh.txt`](testes/resultado-ssh.txt) e
 - [`docs/topologia.md`](docs/topologia.md)
 - [`docs/ssh.md`](docs/ssh.md)
 - [`docs/wireguard.md`](docs/wireguard.md)
+- [`docs/vpn-operacao.md`](docs/vpn-operacao.md)
+- [`docs/engines.md`](docs/engines.md)
 
 ## 🔐 Segurança
 

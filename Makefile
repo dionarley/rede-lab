@@ -1,7 +1,7 @@
 # Atalhos do Rede Lab
 SHELL := /bin/bash
 
-.PHONY: help network deploy vpn vpn-status vpn-test ssh destroy clean
+.PHONY: help network deploy vpn vpn-status vpn-test ssh doctor destroy clean
 
 help:
 	@echo "Rede Lab - alvos disponíveis:"
@@ -11,6 +11,7 @@ help:
 	@echo "  make vpn-status  - mostra o status da VPN"
 	@echo "  make vpn-test    - testa ping/SSH pelo túnel"
 	@echo "  make ssh         - testa SSH casa -> servidor"
+	@echo "  make doctor      - diagnostica dependências e saúde"
 	@echo "  make destroy     - derruba o lab"
 	@echo "  make clean       - derruba e remove imagens locais"
 
@@ -31,6 +32,9 @@ vpn-test:
 
 ssh:
 	./scripts/test-ssh.sh
+
+doctor:
+	./scripts/doctor.sh
 
 destroy:
 	./scripts/destroy.sh
