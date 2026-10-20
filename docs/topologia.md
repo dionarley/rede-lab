@@ -1,45 +1,112 @@
 # Topologia de Rede
 
-## Cenário simulado
+## Diagrama visual
 
-Provedor de Serviço (ISP) ---- NAT ---- Internet pública simulada ---- PC de Casa
-                                                |
-                                            Servidor (SSH + WireGuard)
+![Topologia do Rede Lab](topologia.svg)
+
+Versões alternativas:
+
+- [`topologia.svg`](topologia.svg) — imagem vetorial
+- [`topologia.mmd`](topologia.mmd) — fonte Mermaid
+
+## Diagrama ASCII
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    HOST — Podman / Docker                            │
+│                                                                     │
+│                  rede bridge lab-net: 10.0.0.0/24                   │
+│                                                                     │
+│        ┌────────────────────┐                                       │
+│        │        ISP         │                                       │
+│        │      10.0.0.1      │                                       │
+│        │  NAT + forwarding  │                                       │
+│        └───────┬────────────┘                                       │
+│                │                                                    │
+│       ┌────────┴─────────┐                                          │
+│       │                  │                                          │
+│  ┌────▼─────┐      ┌─────▼──────┐                                  │
+│  │   CASA   │      │  SERVIDOR  │                                  │
+│  │ 10.0.0.10│      │  10.0.0.20 │                                  │
+│  │wg1 .99.10│      │wg0 .99.1   │                                  │
+│  └────┬─────┘      └─────┬──────┘                                  │
+│       │                  │                                          │
+│       └──── WireGuard UDP 51820 ────┘                              │
+│             túnel 10.0.99.0/24  (SSH :22 dentro do túnel)          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Diagrama Mermaid
+
+```mermaid
+flowchart LR
+    subgraph HOST["Host — Podman/Docker"]
+        subgraph NET["Rede bridge lab-net — 10.0.0.0/24"]
+            ISP["ISP / Gateway<br/>10.0.0.1<br/>NAT + IP forwarding"]
+            CASA["CASA<br/>10.0.0.10<br/>wg1: 10.0.99.10"]
+            SERV["SERVIDOR<br/>10.0.0.20<br/>sshd :22<br/>wg0: 10.0.99.1:51820/udp"]
+        end
+    end
+
+    CASA ---|rede| ISP
+    SERV ---|rede| ISP
+    CASA ==>|"WireGuard UDP 51820"| SERV
+    CASA -.->|"SSH labuser@10.0.99.1:22"| SERV
+```
 
 ## Componentes
 
-### ISP (container `isp`)
+### ISP / Gateway (container `isp`)
 - Função: gateway, NAT (MASQUERADE) e IP forwarding.
-- Interface WAN: `10.0.0.1/24`
-- Encaminha tráfego entre `casa`, `servidor` e a rede externa simulada.
-- Faz SNAT dos pacotes que saem dos clientes.
+- Endereço: `10.0.0.1/24` (rede bridge `lab-net`).
+- Encaminha o tráfego entre `casa` e `servidor`.
+- Em Podman rootless, o `iptables` pode não carregar módulos do kernel;
+  nesse caso o NAT é apenas conceitual e a comunicação direta pela bridge
+  continua funcionando.
 
 ### PC de Casa (container `casa`)
 - Função: cliente final.
-- Interface LAN: `192.168.10.10/24` (gateway `10.0.0.1`)
-- Interface WAN: `10.0.0.10/24`
-- Cliente WireGuard: `10.0.99.10`
-- Cliente SSH: conecta ao servidor via túnel WG.
+- Endereço na bridge: `10.0.0.10/24` (gateway `10.0.0.1`).
+- Cliente WireGuard (`wg1`): `10.0.99.10/24`.
+- Cliente SSH: conecta ao servidor via túnel em `10.0.99.1:22`.
 
 ### Servidor (container `servidor`)
 - Função: servidor de serviços.
-- Interface LAN: `192.168.10.20/24` (gateway `10.0.0.1`)
-- Interface WAN: `10.0.0.20/24`
-- Servidor WireGuard: `10.0.99.1` (escuta na porta UDP 51820)
-- Servidor SSH: porta 22 (acessível via IP do túnel `10.0.99.1`)
+- Endereço na bridge: `10.0.0.20/24` (gateway `10.0.0.1`).
+- Servidor WireGuard (`wg0`): `10.0.99.1/24`, escuta em `51820/udp`.
+- Servidor SSH: `0.0.0.0:22` (acessível pelo túnel em `10.0.99.1`).
 
-## Fluxo de tráfego esperado
+## Planos de endereçamento
 
-1. Casa gera pacote SSH com destino `10.0.99.1` (servidor via WG).
-2. Pacote é encapsulado pelo WireGuard (UDP 51820) e enviado para `10.0.0.20`.
-3. ISP faz NAT/forwarding se necessário e entrega ao servidor.
-4. Servidor decapsula o WG, recebe o SSH na porta 22 e responde.
-5. Resposta volta pelo mesmo caminho até a casa.
+| Plano | Faixa | Uso |
+|-------|-------|-----|
+| Bridge / WAN simulada | `10.0.0.0/24` | Comunicação dos containers |
+| Túnel WireGuard | `10.0.99.0/24` | VPN entre casa e servidor |
+
+| Host | Bridge (`10.0.0.0/24`) | WireGuard (`10.0.99.0/24`) |
+|------|-------------------------|----------------------------|
+| ISP | `10.0.0.1` (gateway) | — |
+| Casa | `10.0.0.10` | `10.0.99.10` |
+| Servidor | `10.0.0.20` | `10.0.99.1` |
+
+## Fluxo de tráfego
+
+1. A casa gera um pacote SSH com destino `10.0.99.1` (IP do servidor no túnel).
+2. O WireGuard encapsula o pacote em UDP e envia para `10.0.0.20:51820`.
+3. O ISP atua como gateway/NAT da rede `10.0.0.0/24`.
+4. O servidor decapsula o WireGuard e entrega o SSH à porta 22.
+5. A resposta percorre o caminho inverso até a casa.
 
 ## Portas
 
-| Serviço | Container | Porta | Protocolo |
-|---------|-----------|-------|-----------|
-| SSH     | servidor  | 22    | TCP       |
-| WireGuard | servidor | 51820 | UDP       |
-| WireGuard | casa     | 51821 | UDP       |
+| Serviço | Container | Porta | Protocolo | Observação |
+|---------|-----------|-------|-----------|------------|
+| SSH | servidor | 22 | TCP | Acessível via `10.0.99.1` |
+| WireGuard | servidor | 51820 | UDP | Porta fixa do túnel |
+| WireGuard | casa | efêmera | UDP | Escolhida pelo kernel |
+
+## Como regenerar/editar o diagrama
+
+- **SVG**: edite `docs/topologia.svg` diretamente (texto puro).
+- **Mermaid**: edite `docs/topologia.mmd` ou o bloco Mermaid acima.
+- **ASCII**: edite o bloco correspondente neste arquivo.

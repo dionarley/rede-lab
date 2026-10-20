@@ -148,6 +148,14 @@ labuser
 Detalhes em [`testes/resultado-ssh.txt`](testes/resultado-ssh.txt) e
 [`testes/resultado-wireguard.txt`](testes/resultado-wireguard.txt).
 
+## 🗺️ Topologia
+
+![Topologia do Rede Lab](docs/topologia.svg)
+
+- [`docs/topologia.svg`](docs/topologia.svg) — diagrama vetorial
+- [`docs/topologia.mmd`](docs/topologia.mmd) — fonte Mermaid
+- [`docs/topologia.md`](docs/topologia.md) — detalhes e diagrama ASCII
+
 ## 📄 Documentação
 
 - [`docs/topologia.md`](docs/topologia.md)
