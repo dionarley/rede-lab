@@ -1,0 +1,13 @@
+flowchart LR
+    subgraph HOST["Host — Podman/Docker"]
+        subgraph NET["Rede bridge lab-net — 10.0.0.0/24"]
+            ISP["ISP / Gateway<br/>10.0.0.1<br/>NAT + IP forwarding"]
+            CASA["CASA<br/>10.0.0.10<br/>wg1: 10.0.99.10"]
+            SERV["SERVIDOR<br/>10.0.0.20<br/>sshd :22<br/>wg0: 10.0.99.1:51820/udp"]
+        end
+    end
+
+    CASA ---|rede| ISP
+    SERV ---|rede| ISP
+    CASA ==>|"WireGuard UDP 51820"| SERV
+    CASA -.->|"SSH labuser@10.0.99.1:22"| SERV
