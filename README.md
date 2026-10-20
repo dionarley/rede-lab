@@ -26,6 +26,7 @@ rede-lab/
 │   ├── vpn-operacao.md       # operação da VPN
 │   ├── engines.md            # suporte Podman/Docker
 │   ├── compose.md            # uso do Docker/Podman Compose
+│   ├── nat.html              # explicação visual da camada de NAT
 │   └── seguranca.md          # política de segredos
 ├── network/
 │   └── lab-network.sh        # criação da rede bridge
@@ -194,6 +195,7 @@ Detalhes em [`testes/resultado-ssh.txt`](testes/resultado-ssh.txt) e
 - [`docs/topologia.svg`](docs/topologia.svg) — diagrama vetorial
 - [`docs/topologia.mmd`](docs/topologia.mmd) — fonte Mermaid
 - [`docs/topologia.md`](docs/topologia.md) — detalhes e diagrama ASCII
+- [`docs/nat.html`](docs/nat.html) — camada de NAT explicada visualmente
 
 ## 📄 Documentação
 
@@ -202,6 +204,7 @@ Detalhes em [`testes/resultado-ssh.txt`](testes/resultado-ssh.txt) e
 - [`docs/wireguard.md`](docs/wireguard.md)
 - [`docs/vpn-operacao.md`](docs/vpn-operacao.md)
 - [`docs/engines.md`](docs/engines.md)
+- [`docs/nat.html`](docs/nat.html) — explicação visual da camada de NAT
 
 ## 🔐 Segurança
 
