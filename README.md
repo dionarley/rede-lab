@@ -28,6 +28,7 @@ rede-lab/
 │   ├── compose.md            # uso do Docker/Podman Compose
 │   ├── nat.html              # explicação visual da camada de NAT
 │   ├── containers.html       # como entrar em cada container
+│   ├── exercicio-casa-de-praia.md # exercício: site remoto via WireGuard
 │   └── seguranca.md          # política de segredos
 ├── network/
 │   └── lab-network.sh        # criação da rede bridge
@@ -207,6 +208,10 @@ Detalhes em [`testes/resultado-ssh.txt`](testes/resultado-ssh.txt) e
 - [`docs/engines.md`](docs/engines.md)
 - [`docs/nat.html`](docs/nat.html) — explicação visual da camada de NAT
 - [`docs/containers.html`](docs/containers.html) — como entrar em cada container
+
+## 🧪 Exercício
+
+- [`docs/exercicio-casa-de-praia.md`](docs/exercicio-casa-de-praia.md) — conecte uma casa fora da rede ao lab via WireGuard.
 
 ## 🔐 Segurança
 
