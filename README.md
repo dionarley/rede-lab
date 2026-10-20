@@ -12,13 +12,19 @@ Suporta **Podman** e **Docker** (detecção automática via `.env`).
 
 ```
 rede-lab/
-├── .env                      # configuração (engine, IPs, portas)
-├── .env.example              # modelo de configuração
+├── .env.example              # template público (versionado)
+├── .env                      # configuração local (ignorada pelo git)
+├── .githooks/
+│   └── pre-commit            # bloqueia .env/segredos antes do commit
+├── .github/workflows/ci.yml  # CI: shellcheck + guard
 ├── README.md
 ├── docs/
-│   ├── topologia.md          # rede e endereçamento
+│   ├── topologia.md          # rede, diagrama e endereçamento
 │   ├── ssh.md                # implementação e testes de SSH
-│   └── wireguard.md          # implementação e testes de WireGuard
+│   ├── wireguard.md          # implementação e testes de WireGuard
+│   ├── vpn-operacao.md       # operação da VPN
+│   ├── engines.md            # suporte Podman/Docker
+│   └── seguranca.md          # política de segredos
 ├── network/
 │   └── lab-network.sh        # criação da rede bridge
 ├── isp/                      # gateway / provedor (NAT)
@@ -40,6 +46,8 @@ rede-lab/
 │   ├── common.sh             # carrega .env + detecta engine
 │   ├── deploy.sh             # sobe todo o lab
 │   ├── destroy.sh            # derruba todo o lab
+│   ├── doctor.sh             # diagnóstico
+│   ├── guard.sh              # bloqueia .env/segredos
 │   ├── vpn.sh                # gerencia a instância VPN
 │   └── test-ssh.sh           # testa SSH pelo túnel
 └── testes/
@@ -77,6 +85,9 @@ Copie o modelo e ajuste se necessário:
 cp .env.example .env
 ```
 
+O `.env` é **local e ignorado pelo git**. Se ele não existir, os scripts o
+criam automaticamente a partir do `.env.example`. Nunca commite o `.env`.
+
 Para forçar um engine específico:
 
 ```bash
@@ -90,6 +101,13 @@ CONTAINER_ENGINE=podman ./scripts/deploy.sh
 ### Pré-requisitos
 - [Podman](https://podman.io/) **ou** [Docker](https://www.docker.com/)
 - `bash`
+
+### 0. Configurar ambiente
+
+```bash
+cp .env.example .env   # opcional: os scripts criam automaticamente
+make hooks             # instala o hook de pre-commit
+```
 
 ### 1. Subir o lab
 
@@ -168,5 +186,14 @@ Detalhes em [`testes/resultado-ssh.txt`](testes/resultado-ssh.txt) e
 
 Este é um lab educacional. As credenciais (`labuser/labpass`) e a opção
 `StrictHostKeyChecking no` são intencionais para testes e **não devem** ser
-usadas em produção. As chaves WireGuard são geradas em tempo de execução e
-ignoradas pelo Git.
+usadas em produção.
+
+Proteções contra vazamento:
+
+- `.env` **nunca** é versionado; o template público é `.env.example`.
+- `scripts/guard.sh` bloqueia `.env`, chaves privadas e padrões de segredo.
+- Hook de pre-commit: instale com `make hooks`.
+- CI executa o guard em todo push/PR.
+- Chaves WireGuard são geradas em tempo de execução e ignoradas pelo Git.
+- Se um segredo real for commitado, rotacione-o e purgue o histórico
+  (`git filter-repo`). Veja [`docs/seguranca.md`](docs/seguranca.md).
