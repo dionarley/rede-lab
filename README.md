@@ -120,7 +120,13 @@ SSH_VIA_WG_OK
 labuser
 ```
 
-### 4. Derrubar tudo
+### 4. Diagnóstico
+
+```bash
+./scripts/doctor.sh
+```
+
+### 5. Derrubar tudo
 
 ```bash
 ./scripts/destroy.sh

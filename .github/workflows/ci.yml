@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  shellcheck:
+    name: Lint shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Validar sintaxe e erros
+        run: |
+          find . -name '*.sh' -not -path './.git/*' -print0 \
+            | xargs -0 shellcheck -S error
+
+  validate-config:
+    name: Validar configs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar arquivos essenciais
+        run: |
+          test -f README.md
+          test -f .env.example
+          test -f scripts/deploy.sh
+          test -f scripts/vpn.sh
+          test -f wireguard/wg0.conf
+          test -f wireguard/wg1.conf
+          echo "Configs essenciais presentes."
