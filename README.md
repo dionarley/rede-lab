@@ -27,6 +27,7 @@ rede-lab/
 │   ├── engines.md            # suporte Podman/Docker
 │   ├── compose.md            # uso do Docker/Podman Compose
 │   ├── nat.html              # explicação visual da camada de NAT
+│   ├── containers.html       # como entrar em cada container
 │   └── seguranca.md          # política de segredos
 ├── network/
 │   └── lab-network.sh        # criação da rede bridge
@@ -205,6 +206,7 @@ Detalhes em [`testes/resultado-ssh.txt`](testes/resultado-ssh.txt) e
 - [`docs/vpn-operacao.md`](docs/vpn-operacao.md)
 - [`docs/engines.md`](docs/engines.md)
 - [`docs/nat.html`](docs/nat.html) — explicação visual da camada de NAT
+- [`docs/containers.html`](docs/containers.html) — como entrar em cada container
 
 ## 🔐 Segurança
 
