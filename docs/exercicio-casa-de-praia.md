@@ -1,262 +1,187 @@
-# Exercício — Casa de praia via WireGuard
+# Exercício — PC na casa de praia via WireGuard
 
 > **Exercício somente documentado.** Este roteiro não cria nada automaticamente.
-> Ele descreve, passo a passo, como construir uma instância **“casa de praia”**
-> fora da rede do lab e conectá-la ao servidor por WireGuard.
+> Ele descreve como conectar **um PC físico na casa de praia** ao servidor do
+> lab por WireGuard.
+>
+> A casa de praia é **literalmente um PC** (notebook ou desktop), fora da rede
+> do lab. Ela **não** é um container do lab. A versão anterior deste exercício
+> simulava a casa com um container em `praia-net`; este roteiro substitui
+> aquela abordagem.
 
 ## Objetivo
 
-Criar um site remoto isolado, a **casa de praia**, que:
+Conectar um PC que está na casa de praia, atrás do NAT do roteador doméstico,
+ao servidor do lab:
 
-- fica em uma rede própria (`praia-net`, `10.0.50.0/24`);
-- **não** tem interface na `lab-net` (`10.0.0.0/24`);
-- alcança o lab apenas pelo endpoint WireGuard publicado pelo host;
-- usa uma segunda instância WireGuard no servidor (`wg2`, `10.0.100.0/24`);
-- consegue fazer SSH em `labuser@10.0.100.1` pelo túnel.
+- o PC navega na internet normalmente;
+- o PC não tem porta pública nem precisa de port forward em casa;
+- o PC inicia o túnel WireGuard para o endpoint público do lab;
+- o servidor usa uma interface dedicada (`wg2`, `10.0.100.0/24`);
+- o PC recebe `10.0.100.10/24` e o servidor `10.0.100.1/24`;
+- o teste final é `ssh labuser@10.0.100.1` a partir do PC.
 
-Nada é executado por este documento. Os arquivos e comandos abaixo são o
-roteiro para você reproduzir o exercício.
+A VPN existente do lab (`wg0`/`wg1`, `10.0.99.0/24`) não é alterada.
 
-## O que você vai praticar
-
-- Rede bridge isolada.
-- Publicação de porta UDP no host.
-- Segunda interface WireGuard sem mexer na VPN existente.
-- `AllowedIPs` mínimo e `PersistentKeepalive`.
-- Endpoint via gateway da bridge (`10.0.50.254`) em vez de IP público.
-- Diagnóstico de handshake, rota e SSH.
-
-## Cenário
+## Cenário real
 
 ```text
-Casa de praia — praia-net 10.0.50.0/24
-┌──────────────────────────────────────────────┐
-│  casa-praia 10.0.50.10                       │
-│  wg0 10.0.100.10/24                          │
-└───────────────────┬──────────────────────────┘
-                    │ UDP 51821/udp
-                    │ endpoint 10.0.50.254:51821
-                    ▼
-┌──────────────────────────────────────────────┐
-│ Host                                         │
-│ publica 51821/udp -> servidor:51821          │
-└───────────────────┬──────────────────────────┘
-                    │ DNAT
-                    ▼
+Casa de praia (fora do lab)
+┌─────────────────────────────────────────────────────┐
+│  PC físico (Windows/Linux/macOS)                    │
+│  wg0 10.0.100.10/24                                 │
+│  rede local da casa: DHCP, atrás do NAT do roteador │
+└───────────────────────┬─────────────────────────────┘
+                        │ UDP 51821 de saída
+                        │ endpoint: IP público do lab:51821
+                        ▼
+                    Internet
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────┐
+│  Host do lab                                        │
+│  publica 51821/udp -> servidor:51821                │
+│  (equivalente ao port forward do roteador)          │
+└───────────────────────┬─────────────────────────────┘
+                        │ DNAT
+                        ▼
 Lab — lab-net 10.0.0.0/24
-┌──────────────────────────────────────────────┐
-│  servidor 10.0.0.20                          │
-│  wg2 10.0.100.1/24  listen 51821/udp         │
-│  wg0 10.0.99.1/24   listen 51820/udp (lab)   │
-│                                              │
-│  casa 10.0.0.10                              │
-│  wg1 10.0.99.10/24 (VPN existente)           │
-└──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│  servidor 10.0.0.20                                 │
+│  wg2 10.0.100.1/24  listen 51821/udp                │
+│  wg0 10.0.99.1/24   listen 51820/udp (VPN do lab)   │
+│                                                     │
+│  casa 10.0.0.10 / wg1 10.0.99.10                    │
+└─────────────────────────────────────────────────────┘
 ```
 
-O host faz o papel de “internet” entre as duas redes. A casa de praia não
-enxerga `10.0.0.20` por rota direta; o caminho documentado é o túnel até
-`10.0.100.1`.
+O PC da casa de praia não tem endereço na `lab-net`. Ele só alcança o
+`servidor` pelo túnel até `10.0.100.1`.
+
+### Nota sobre o NAT simulado do lab
+
+No lab, o `servidor` está atrás do container `isp` (`10.0.0.1`). Neste
+exercício, o **host publica** `51821/udp` diretamente para o `servidor`; isso
+representa o port forward do roteador/cloud do lab. O NAT do container `isp`
+continua sendo o NAT interno do lab e **não** é usado nesse caminho.
+
+Para o tráfego atravessar o `isp`, seriam necessárias regras de DNAT no `isp`
+e rotas no host. Isso é um desafio extra, não o foco do exercício.
 
 ## Endereçamento
 
-| Elemento | Rede | IP | WireGuard | Porta |
-|----------|------|----|-----------|-------|
-| Casa de praia | `praia-net 10.0.50.0/24` | `10.0.50.10` | `wg0 10.0.100.10/24` | — |
-| Gateway da praia | `praia-net` | `10.0.50.254` | — | — |
+| Elemento | Rede | Endereço | WireGuard | Porta |
+|----------|------|----------|-----------|-------|
+| PC da casa de praia | rede da casa (DHCP) | fornecido pelo roteador | `wg0 10.0.100.10/24` | — |
+| Roteador da casa | NAT de saída | IP público da operadora | — | — |
+| Host do lab | IP público ou LAN | `<IP_PUBLICO_DO_LAB>` | — | publica `51821/udp` |
 | Servidor — wg2 | `lab-net 10.0.0.0/24` | `10.0.0.20` | `wg2 10.0.100.1/24` | `51821/udp` |
 | Servidor — wg0 do lab | `lab-net` | `10.0.0.20` | `wg0 10.0.99.1/24` | `51820/udp` |
 | Casa do lab | `lab-net` | `10.0.0.10` | `wg1 10.0.99.10/24` | — |
 
-**Por que uma segunda interface (`wg2`)?**
-
-- Não altera o `wg0` existente; o `vpn.sh` recria `wg0`/`wg1` e não mexe em `wg2`.
-- Usa uma porta separada (`51821`), fácil de liberar/bloquear.
-- Permite remover a casa de praia sem afetar a VPN do lab.
-- Evita misturar os peers e sub-redes `10.0.99.0/24` e `10.0.100.0/24`.
-
 ## Pré-requisitos
 
-- Lab rodando via Compose:
+- Um PC na casa de praia com internet:
+  - Windows 10/11, Linux ou macOS;
+  - cliente WireGuard instalado;
+  - cliente SSH (no Windows 10/11, o OpenSSH Client opcional).
+- O PC pode ser um notebook ou desktop. Para testar sem hardware, use uma VM
+  na rede da casa; o importante é ser um host **fora do lab**, não um
+  container na `lab-net`.
+- Lab rodando via Compose.
+- Porta **51821/udp** livre no host do lab.
+- O host do lab precisa ser alcançável pelo PC:
+  - IP público + port forward no roteador; ou
+  - VM/cloud com UDP `51821` liberado no security group; ou
+  - VPS/relay público, caso o lab esteja atrás de CGNAT.
+- Credenciais de laboratório `labuser` / `labpass`.
+- Um canal para copiar a chave **pública** do PC para o servidor (a privada
+  nunca sai do PC).
 
-  ```bash
-  ./scripts/compose.sh ps
-  ./scripts/vpn.sh status
-  podman exec servidor wg show wg0
-  ```
-
-  Troque `podman` por `docker` se for o caso.
-
-- `podman-compose` ou `docker compose`.
-- Porta **51821/udp** livre no host.
-- `wireguard-tools` nas imagens do servidor e da casa de praia.
-- Credenciais de laboratório `labuser` / `labpass` (já existentes no servidor).
-- Acesso à internet apenas para o build da imagem (`dnf`). O WireGuard usa
-  o host como endpoint e não depende de DNS externo.
-
-## Passo 0 — Baseline
-
-Confirme que a VPN existente está saudável antes de adicionar o novo site:
+## Passo 0 — Baseline do lab
 
 ```bash
+./scripts/compose.sh ps
 ./scripts/vpn.sh status
 podman exec servidor wg show wg0
-podman exec casa wg show wg1
 ```
 
-Resultado esperado: `wg0` com o peer da casa e handshake recente.
+Troque `podman` por `docker` se for o caso. Resultado esperado: `wg0` com o
+peer da casa e handshake recente.
 
-## Passo 1 — Criar os arquivos do exercício
+## Passo 1 — Publicar o endpoint do lab
 
-Crie a pasta `casa-praia/` com os dois arquivos abaixo.
+O servidor escuta WireGuard em `51821/udp`. Para um PC externo, essa porta
+precisa chegar ao container `servidor`.
 
-### `casa-praia/Dockerfile`
+### 1.1 Override do Compose
 
-```dockerfile
-FROM fedora:latest
-
-RUN dnf -y install \
-        wireguard-tools \
-        iproute \
-        iputils \
-        openssh-clients \
-        sshpass \
-        procps-ng \
-        nano \
-    && dnf clean all
-
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
-```
-
-### `casa-praia/entrypoint.sh`
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "[casa-praia] rede isolada pronta"
-ip -brief addr
-
-exec tail -f /dev/null
-```
-
-O entrypoint **não** altera a rota padrão. A rota da casa de praia continua
-sendo a da bridge `praia-net`, via `10.0.50.254`.
-
-### `compose.praia.yaml`
-
-Arquivo de override do Compose. Ele adiciona a porta publicada no servidor,
-o serviço `casa-praia`, a rede `praia-net` e um volume para as chaves.
+Crie `compose.praia.yaml` apenas com a publicação da porta. Não há serviço de
+container para a casa de praia; o PC é externo.
 
 ```yaml
 services:
   servidor:
     ports:
       - "51821:51821/udp"
-
-  casa-praia:
-    build:
-      context: ./casa-praia
-      dockerfile: Dockerfile
-    image: lab-casa-praia
-    container_name: casa-praia
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    volumes:
-      - wg-praia:/etc/wireguard
-    networks:
-      praia-net:
-        ipv4_address: 10.0.50.10
-    depends_on:
-      - servidor
-
-networks:
-  praia-net:
-    name: praia-net
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.0.50.0/24
-          gateway: 10.0.50.254
-
-volumes:
-  wg-praia:
-    name: rede-lab-wg-praia
 ```
 
-Pontos importantes:
+Se você criou o `compose.praia.yaml` da versão anterior (com o serviço
+`casa-praia`), substitua-o por este. O PC não é um container.
 
-- `casa-praia` só entra em `praia-net`; não tem endereço em `lab-net`.
-- `NET_ADMIN` é necessário para criar o `wg0`.
-- `NET_RAW` é opcional e serve para liberar `ping` em Podman rootless.
-- O volume `rede-lab-wg-praia` preserva as chaves entre recriações.
-- A porta `51821/udp` é publicada no host e encaminhada ao container
-  `servidor`.
-
-## Passo 2 — Subir a casa de praia
+### 1.2 Subir o servidor com a porta
 
 ```bash
 # Podman
-podman-compose -f docker-compose.yml -f compose.praia.yaml up -d --build
+podman-compose -f docker-compose.yml -f compose.praia.yaml up -d --force-recreate servidor
 
 # Docker
-docker compose -f docker-compose.yml -f compose.praia.yaml up -d --build
+docker compose -f docker-compose.yml -f compose.praia.yaml up -d --force-recreate servidor
 ```
 
-O Compose vai recriar o `servidor` para aplicar a porta `51821/udp`. Por isso,
-reconfigure a VPN existente:
+O `servidor` foi recriado; restaure a VPN existente do lab:
 
 ```bash
 ./scripts/vpn.sh start
 ```
 
-Se o Compose não detectar a mudança de porta, force a recriação:
-
-```bash
-# Podman
-podman-compose -f docker-compose.yml -f compose.praia.yaml up -d --build --force-recreate
-
-# Docker
-docker compose -f docker-compose.yml -f compose.praia.yaml up -d --build --force-recreate
-```
-
-Depois rode `./scripts/vpn.sh start` novamente.
-
 Confira:
 
 ```bash
-podman ps --format 'table {{.Names}}\t{{.Status}}'
 podman port servidor 51821/udp
-podman exec casa-praia ip -brief addr
+# ou: docker port servidor 51821/udp
 ```
 
 Resultado esperado (algo como):
 
 ```text
-eth0@if... UP 10.0.50.10/24
-```
-
-E a porta publicada deve aparecer como algo do tipo:
-
-```text
 0.0.0.0:51821
 ```
 
-Se estiver usando Docker, troque `podman` por `docker`.
+### 1.3 Liberar no roteador/cloud
 
-## Passo 3 — Gerar as chaves
+- **Lab em casa:** faça port forward de **UDP 51821** para o IP LAN do host
+  que roda Podman/Docker. Libere também a porta no firewall do host.
+- **Lab em cloud:** libere **UDP 51821** no security group/firewall da VM.
+- **Teste local:** se o PC estiver na mesma LAN do host, use o IP LAN do host
+  como endpoint. Isso valida a configuração, mas não prova a travessia pela
+  internet.
 
-Use o mesmo terminal para os próximos passos, porque as variáveis são
-reaproveitadas.
+Descubra o IP público do lab:
+
+```bash
+curl -4 ifconfig.me
+```
+
+Se o IP público retornado for diferente do IP WAN mostrado no roteador, você
+pode estar atrás de **CGNAT**. Nesse caso, port forward no roteador não
+funciona; use um VPS/relay ou uma VPN de malha (veja os desafios).
+
+## Passo 2 — Gerar a chave do servidor (`wg2`)
 
 ```bash
 ENGINE=podman   # ou: ENGINE=docker
 
-# Servidor (interface wg2)
 $ENGINE exec servidor bash -c '
   mkdir -p /etc/wireguard
   umask 077
@@ -266,33 +191,97 @@ $ENGINE exec servidor bash -c '
   chmod 600 /etc/wireguard/praia-servidor.key
 '
 
-# Casa de praia (interface wg0)
-$ENGINE exec casa-praia bash -c '
-  mkdir -p /etc/wireguard
-  umask 077
-  { [ -f /etc/wireguard/praia.key ] && [ -f /etc/wireguard/praia.pub ]; } || (
-    wg genkey | tee /etc/wireguard/praia.key | wg pubkey > /etc/wireguard/praia.pub
-  )
-  chmod 600 /etc/wireguard/praia.key
-'
-```
-
-Leia as chaves públicas:
-
-```bash
-PRAIA_PUB=$($ENGINE exec casa-praia cat /etc/wireguard/praia.pub)
 SERVIDOR_PRAIA_PUB=$($ENGINE exec servidor cat /etc/wireguard/praia-servidor.pub)
-
-echo "casa de praia: $PRAIA_PUB"
-echo "servidor wg2:  $SERVIDOR_PRAIA_PUB"
+echo "Chave pública do servidor wg2: $SERVIDOR_PRAIA_PUB"
 ```
 
-> Não regenere as chaves depois de configurar os peers. As chaves privadas
-> ficam nos volumes `rede-lab-wg-praia` e `rede-lab-wg-servidor`.
+A chave privada fica no volume `rede-lab-wg-servidor` e nunca deve ser
+copiada para o PC. O PC só precisa da chave **pública** acima.
 
-## Passo 4 — Configurar o `wg2` no servidor
+## Passo 3 — Gerar a chave e a configuração no PC
+
+A chave privada do PC fica no PC. O servidor só precisa da chave **pública**.
+
+### Windows 10/11
+
+1. Instale o cliente oficial: <https://www.wireguard.com/install/>.
+2. Abra o WireGuard e escolha **Add Tunnel → Add empty tunnel...**.
+3. Dê o nome `praia`. O app gera um par de chaves e mostra a **public key**.
+4. Copie essa chave pública; ela será usada no servidor.
+5. Substitua o conteúdo pelo modelo abaixo, mantendo a `PrivateKey` gerada
+   pelo app:
+
+```ini
+[Interface]
+PrivateKey = <chave-privada-gerada-pelo-app>
+Address = 10.0.100.10/24
+
+[Peer]
+PublicKey = <SERVIDOR_PRAIA_PUB>
+Endpoint = <IP_PUBLICO_DO_LAB>:51821
+AllowedIPs = 10.0.100.1/32
+PersistentKeepalive = 25
+```
+
+6. Salve. Ainda não ative se o peer do servidor não existir; o app pode ficar
+   tentando o handshake até o passo 4.
+7. Deixe **Block untunneled traffic** desmarcado neste exercício; não queremos
+   bloquear a internet normal do PC.
+
+> Não configure `DNS = 10.0.100.1` a menos que o servidor tenha um DNS
+> escutando nesse IP. Para este exercício, omita `DNS` ou use um DNS público.
+
+### Linux
 
 ```bash
+sudo apt install wireguard-tools openssh-client   # Debian/Ubuntu
+# ou: sudo dnf install wireguard-tools openssh-clients
+
+sudo mkdir -p /etc/wireguard
+sudo sh -c 'umask 077; wg genkey > /etc/wireguard/praia.key; wg pubkey < /etc/wireguard/praia.key > /etc/wireguard/praia.pub'
+sudo cat /etc/wireguard/praia.pub
+```
+
+Copie o conteúdo de `/etc/wireguard/praia.pub` para cadastrar no servidor.
+Crie `/etc/wireguard/wg0.conf`:
+
+```ini
+[Interface]
+PrivateKey = <conteúdo-do-arquivo-/etc/wireguard/praia.key>
+Address = 10.0.100.10/24
+
+[Peer]
+PublicKey = <SERVIDOR_PRAIA_PUB>
+Endpoint = <IP_PUBLICO_DO_LAB>:51821
+AllowedIPs = 10.0.100.1/32
+PersistentKeepalive = 25
+```
+
+Proteja o arquivo:
+
+```bash
+sudo chmod 600 /etc/wireguard/wg0.conf
+```
+
+Ative depois de cadastrar o peer no servidor:
+
+```bash
+sudo wg-quick up wg0
+sudo wg show
+```
+
+### macOS
+
+Use o app oficial WireGuard, como no Windows: **Add empty tunnel**, copie a
+chave pública, cole a configuração e salve. O `ssh` já vem no sistema.
+
+## Passo 4 — Cadastrar o PC no `wg2` do servidor
+
+Use a chave pública que o PC gerou:
+
+```bash
+PRAIA_PUB='<CHAVE_PUBLICA_DO_PC>'
+
 $ENGINE exec servidor bash -c "
   ip link del wg2 2>/dev/null || true
   ip link add wg2 type wireguard
@@ -302,13 +291,6 @@ $ENGINE exec servidor bash -c "
   ip link set wg2 up
 "
 ```
-
-Por que `allowed-ips 10.0.100.10/32`?
-
-- É o menor escopo possível: o servidor só aceita o IP WireGuard da casa
-  de praia.
-- Não libera, por padrão, acesso à `lab-net` (`10.0.0.0/24`).
-- Para liberar outros destinos, veja os desafios no final.
 
 Confira:
 
@@ -322,302 +304,296 @@ Resultado esperado:
 interface: wg2
   listening port: 51821
 
-peer: <chave-publica-da-praia>
+peer: <chave-publica-do-pc>
   allowed ips: 10.0.100.10/32
 ```
 
-## Passo 5 — Configurar o `wg0` na casa de praia
+`AllowedIPs = 10.0.100.10/32` é o menor escopo: o servidor aceita apenas o IP
+WireGuard do PC e não libera a `lab-net` por padrão.
+
+> A configuração de `wg2` acima é de runtime. Se o container `servidor` for
+> recriado, ela desaparece. Para persistir, veja o desafio 4.
+
+## Passo 5 — Ativar o túnel e testar
+
+### Windows
+
+Ative a tunnel `praia` no app e abra o PowerShell:
+
+```powershell
+ping 10.0.100.1
+ssh -o StrictHostKeyChecking=no labuser@10.0.100.1 "echo PRAIA_OK; whoami"
+```
+
+Se `ssh` não existir, instale o recurso opcional **OpenSSH Client** em
+Configurações → Aplicativos → Recursos opcionais. A senha do lab é `labpass`.
+
+### Linux
 
 ```bash
-$ENGINE exec casa-praia bash -c "
-  ip link del wg0 2>/dev/null || true
-  ip link add wg0 type wireguard
-  ip address add 10.0.100.10/24 dev wg0
-  wg set wg0 private-key /etc/wireguard/praia.key
-  wg set wg0 peer '$SERVIDOR_PRAIA_PUB' allowed-ips 10.0.100.1/32 endpoint 10.0.50.254:51821 persistent-keepalive 15
-  ip link set wg0 up
-"
+sudo wg-quick up wg0
+ping -c 3 10.0.100.1
+ssh -o StrictHostKeyChecking=no labuser@10.0.100.1 'echo PRAIA_OK; id -un'
 ```
-
-O endpoint `10.0.50.254:51821` é o gateway da `praia-net` mais a porta
-publicada no host. Alternativas:
-
-- Podman: `host.containers.internal:51821`
-- Docker: `host.docker.internal:51821` (no Linux, adicione
-  `extra_hosts: ["host.docker.internal:host-gateway"]`)
-- Docker Desktop: prefira `host.docker.internal:51821`; o gateway da bridge
-  pode não encaminhar para portas publicadas no host.
-
-Confira:
-
-```bash
-$ENGINE exec casa-praia wg show wg0
-```
-
-Resultado esperado:
-
-```text
-interface: wg0
-  public key: <chave-publica-da-praia>
-  private key: (hidden)
-  listening port: <porta-efemera>
-
-peer: <chave-publica-do-servidor>
-  endpoint: 10.0.50.254:51821
-  allowed ips: 10.0.100.1/32
-  latest handshake: <há poucos segundos>
-  transfer: <bytes> received, <bytes> sent
-  persistent keepalive: every 15 seconds
-```
-
-## Passo 6 — Testar
 
 ### Handshake dos dois lados
 
 ```bash
+# Servidor
 $ENGINE exec servidor wg show wg2
-$ENGINE exec casa-praia wg show wg0
-```
 
-### Ping pelo túnel
+# PC Linux
+sudo wg show
 
-```bash
-$ENGINE exec casa-praia ping -c 3 10.0.100.1
-```
-
-Se o ping falhar em Podman rootless mesmo com `NET_RAW`, use o teste SSH
-(TCP), que é o critério principal do exercício.
-
-### SSH pelo túnel
-
-```bash
-$ENGINE exec casa-praia sshpass -p labpass ssh \
-  -o StrictHostKeyChecking=no \
-  -o UserKnownHostsFile=/dev/null \
-  -o ConnectTimeout=8 \
-  labuser@10.0.100.1 'echo PRAIA_OK; id -un'
+# PC Windows: veja o status no app WireGuard
 ```
 
 Resultado esperado:
 
-```text
-PRAIA_OK
-labuser
-```
+- `latest handshake` recente nos dois lados;
+- `PRAIA_OK`;
+- `labuser` (ou o usuário equivalente no Windows).
 
-Isso prova que a casa de praia chegou ao `servidor` pelo `wg2`, e não por
-uma rota direta na `lab-net`.
+Se o `ping` falhar mas o SSH funcionar, o túnel está OK; alguns firewalls
+bloqueiam ICMP. O SSH em TCP é o teste definitivo.
 
-> `sshpass` e `StrictHostKeyChecking=no` são apenas para o lab. Em produção,
-> use chave SSH e verificação de host.
+## Passo 6 — Conferir rotas e isolamento
 
-## Passo 7 — Provar o isolamento
+### PC Linux
 
 ```bash
 # Deve sair por wg0
-$ENGINE exec casa-praia ip route get 10.0.100.1
+ip route get 10.0.100.1
 
-# Não deve existir rota direta para o lab; deve cair no default da praia
-$ENGINE exec casa-praia ip route get 10.0.0.20
+# Não deve sair por wg0; é a rota normal da internet
+ip route get 10.0.0.20
 
-# A casa de praia só tem IP da praia e do túnel
-$ENGINE exec casa-praia ip -brief addr
-
-# A rede praia-net é separada da lab-net
-$ENGINE network inspect praia-net | grep -iE 'subnet|gateway'
+# Mostra o endereço do PC na rede da casa e no túnel
+ip -brief addr
 ```
 
-Interpretação:
+### PC Windows
 
-- `10.0.100.1` deve aparecer como `dev wg0`.
-- `10.0.0.20` deve aparecer como `via 10.0.50.254 dev eth0` (ou equivalente),
-  não como uma interface do lab.
-- A casa de praia não tem `10.0.0.x` em `eth0`.
+```powershell
+route print
+tracert 10.0.100.1
+```
 
-O host pode encaminhar pacotes entre bridges dependendo da configuração de
-firewall do engine. O objetivo do exercício é que o **caminho documentado**
-para o lab seja o túnel; para garantir isolamento rígido, use regras de
-firewall no host ou um roteador dedicado.
+O `AllowedIPs` do PC cobre apenas `10.0.100.1/32`; a `lab-net`
+(`10.0.0.0/24`) não está no túnel. Para acessar `10.0.0.20`, veja o desafio 1.
 
-## Passo 8 — Limpeza
+Isso é o esperado: a casa de praia é um host externo e só alcança o IP do
+túnel. O PC não envia a `lab-net` pelo túnel, e o servidor não configura
+forwarding/NAT para o peer por padrão.
 
-Remova as interfaces de runtime:
+## Passo 7 — Limpeza
+
+No PC:
+
+- Windows/macOS: desative e remova a tunnel `praia` no app.
+- Linux:
+
+  ```bash
+  sudo wg-quick down wg0
+  sudo rm -f /etc/wireguard/wg0.conf /etc/wireguard/praia.key /etc/wireguard/praia.pub
+  ```
+
+No servidor:
 
 ```bash
-$ENGINE exec casa-praia bash -c 'ip link del wg0 2>/dev/null || true'
-$ENGINE exec servidor bash -c 'ip link del wg2 2>/dev/null || true'
+PRAIA_PUB='<CHAVE_PUBLICA_DO_PC>'
+$ENGINE exec servidor bash -c "
+  wg set wg2 peer '$PRAIA_PUB' remove 2>/dev/null || true
+  ip link del wg2 2>/dev/null || true
+  rm -f /etc/wireguard/praia-servidor.key /etc/wireguard/praia-servidor.pub
+"
 ```
 
-Remova o container e a rede da praia:
-
-```bash
-$ENGINE rm -f casa-praia
-$ENGINE network rm praia-net 2>/dev/null || true
-```
-
-Restaure o servidor sem a porta `51821/udp`:
+Remova a publicação da porta e restaure o servidor sem o override:
 
 ```bash
 ./scripts/compose.sh up --force-recreate servidor
 ```
 
 O wrapper `compose.sh up` já executa `./scripts/vpn.sh start` no final. Se
-você recriar o servidor por outro caminho, rode o `vpn.sh start` manualmente.
+recriar o servidor por outro caminho, rode `./scripts/vpn.sh start`
+manualmente.
 
-Os arquivos `casa-praia/` e `compose.praia.yaml` são de exemplo; apague-os
-se não quiser manter o exercício no repositório.
+Remova o port forward/regra de firewall do roteador ou cloud. Apague
+`compose.praia.yaml` se não quiser manter o exercício.
 
-Se quiser apagar também as chaves da casa de praia:
-
-```bash
-$ENGINE volume rm rede-lab-wg-praia 2>/dev/null || true
-$ENGINE exec servidor rm -f /etc/wireguard/praia-servidor.key /etc/wireguard/praia-servidor.pub
-```
-
-Não remova o volume `rede-lab-wg-servidor` inteiro: ele também guarda as
-chaves da VPN existente do lab.
+Não remova o volume `rede-lab-wg-servidor`: ele também guarda as chaves da VPN
+existente do lab.
 
 ## Troubleshooting
 
-### O handshake não aparece
+### O handshake não acontece
 
-1. Confirme que a porta foi publicada:
+1. Confirme que o PC alcança o endpoint:
+
+   ```bash
+   # No PC (Linux/macOS) ou PowerShell com Test-NetConnection para TCP;
+   # para UDP, o teste real é o handshake do WireGuard.
+   ping <IP_PUBLICO_DO_LAB>
+   ```
+
+2. Confirme a publicação no host:
 
    ```bash
    podman port servidor 51821/udp
    # ou: docker port servidor 51821/udp
    ```
 
-2. Confirme o `listen-port` no servidor:
+3. Confirme o `listen-port` no servidor:
 
    ```bash
    $ENGINE exec servidor wg show wg2
    ```
 
-3. Confirme o endpoint na casa de praia:
+4. Confirme o endpoint no PC:
 
-   ```bash
-   $ENGINE exec casa-praia wg show wg0
-   ```
+   - Windows: status da tunnel no app;
+   - Linux: `sudo wg show`.
 
-4. Verifique se as chaves públicas batem:
+5. Verifique o port forward/security group para **UDP 51821** e o firewall
+   do host.
 
-   ```bash
-   $ENGINE exec casa-praia cat /etc/wireguard/praia.pub
-   $ENGINE exec servidor cat /etc/wireguard/praia-servidor.pub
-   ```
+6. Confirme que a chave pública do PC foi copiada exatamente e que o peer
+   existe no `wg2`.
 
-5. Verifique firewall do host para UDP `51821`. Em rootless, a publicação
-   de portas depende do `rootlessport`/`pasta`.
+7. Se o IP público do lab for CGNAT, o port forward não funciona. Use VPS ou
+   relay.
 
-### `Operation not permitted` ao criar `wg2`/`wg0`
+### A porta aparece só em `127.0.0.1`
 
-Falta `NET_ADMIN`. Confirme o override:
+Se `podman port servidor 51821/udp` mostrar `127.0.0.1:51821`, o PC externo
+não conseguirá chegar. Confirme que a publicação está em `0.0.0.0` e que o
+firewall do host permite UDP `51821`. Em Podman rootless, revise a
+configuração de portas do engine; se necessário, use um proxy/relay.
 
-```yaml
-cap_add:
-  - NET_ADMIN
-```
+### Handshake OK, mas SSH não conecta
 
-Recrie o container depois de alterar.
-
-### `ping` falha, mas o SSH funciona
-
-Comportamento comum em Podman rootless. O `NET_RAW` ajuda, mas o SSH (TCP)
-é o teste definitivo. Não bloqueie o exercício por causa do ping.
-
-### SSH com `Permission denied`
-
-- Use `labuser`, não `root` (o sshd tem `AllowUsers labuser`).
-- A senha do lab é `labpass`.
-- Teste o IP do túnel: `10.0.100.1`.
+- Confirme `AllowedIPs = 10.0.100.1/32` no PC.
+- Confirme `Address = 10.0.100.1/24` no `wg2` do servidor.
 - Confirme que o `sshd` está de pé:
 
   ```bash
   $ENGINE exec servidor pgrep -x sshd
   ```
 
-### `Connection timed out` no SSH
+- Use `labuser`, não `root` (o sshd tem `AllowUsers labuser`).
+- No Windows, confirme que o **OpenSSH Client** está instalado.
+- Teste `ssh -v labuser@10.0.100.1` para ver onde para.
 
-- O endpoint pode estar errado. Tente `10.0.50.254:51821`.
-- Se estiver no Docker, teste `host.docker.internal:51821` com
-  `extra_hosts`.
-- Confirme que a porta publicada existe e que o firewall não bloqueia UDP.
+### `ssh: command not found` no Windows
+
+Instale **OpenSSH Client** em Configurações → Aplicativos → Recursos
+opcionais, ou use PuTTY.
+
+### O túnel ativa, mas a internet para de funcionar
+
+Provavelmente há `AllowedIPs = 0.0.0.0/0` ou um `DNS` inválido. Para este
+exercício, use `AllowedIPs = 10.0.100.1/32` e não configure `DNS` para
+`10.0.100.1`. Se quiser túnel total, veja o desafio 3.
+
+### `Endpoint` não resolve ou tenta IPv6
+
+Use o IP público IPv4 diretamente. Para IPv6, o formato é
+`[2001:db8::1]:51821`, e o firewall/port forward precisa permitir UDP.
+
+### `wg-quick` retorna `Operation not permitted`
+
+No Linux, rode com `sudo`. Em containers, seria `NET_ADMIN`; aqui o PC é um
+host real.
+
+### O container `servidor` foi recriado e o `wg2` sumiu
+
+A interface `wg2` é criada em runtime. Repita o passo 4. O `vpn.sh start`
+recria apenas `wg0`/`wg1`; ele não gerencia `wg2`.
 
 ### A porta `51821` já está em uso
 
-Escolha outra porta no override e no `listen-port`:
+Escolha outra porta no override, no `listen-port` e no endpoint:
 
 ```yaml
 ports:
   - "51822:51822/udp"
 ```
 
-E ajuste:
-
 ```bash
 wg set wg2 listen-port 51822
-# endpoint da casa de praia: 10.0.50.254:51822
+# Endpoint no PC: <IP_PUBLICO_DO_LAB>:51822
 ```
 
-### `vpn.sh start` derrubou o `wg2`?
+Atualize também o port forward do roteador/cloud.
 
-Ele não mexe em `wg2`; ele recria `wg0` e `wg1`. O que derruba o `wg2` é a
-**recriação do container `servidor`**. Nesse caso, repita os passos 4 e 5.
+### O lab está atrás de CGNAT
 
-### `casa-praia` não resolve nomes
+O PC não conseguirá iniciar o túnel para um IP que não é roteável. Opções:
 
-O exercício usa IP no endpoint; DNS não é necessário. Se quiser DNS,
-configure `dns:` no serviço ou use o resolvedor do host.
+- VPS com IP público fazendo relay/port forward para o lab;
+- VPN de malha (Tailscale/Netbird) como transporte até um endpoint público;
+- usar um túnel reverso para um VPS.
+
+Documente a opção escolhida e o rollback.
 
 ## Desafios
 
-1. **Acessar `10.0.0.20` a partir da casa de praia.**
-   Adicione `10.0.0.0/24` aos `AllowedIPs` da casa de praia, habilite
-   forwarding no servidor e trate a chain `FORWARD`/NAT. Documente o caminho
-   e os riscos de ampliar o escopo.
+1. **Acessar `10.0.0.20` a partir do PC.**
+   Adicione `10.0.0.20/32` (ou `10.0.0.0/24`) ao `AllowedIPs` do PC. Para
+   alcançar outros hosts da `lab-net`, habilite `net.ipv4.ip_forward=1` no
+   servidor, permita a chain `FORWARD` e trate NAT/rotas de retorno. Teste e
+   documente os riscos de ampliar o escopo.
 
-2. **Acessar a casa de praia a partir da `casa` do lab.**
-   O servidor precisa encaminhar entre `wg0` (lab) e `wg2` (praia), e os
-   `AllowedIPs` dos dois peers precisam incluir as rotas necessárias.
+2. **Acessar o PC a partir da `casa` do lab.**
+   O servidor precisa encaminhar entre `wg2` e `wg0`/`lab-net`; a `casa`
+   precisa de rota para `10.0.100.0/24` via servidor. Ajuste `AllowedIPs` dos
+   dois lados.
 
-3. **Persistir a configuração.**
-   Crie `scripts/vpn-praia.sh` com `start|stop|status|test` e chame-o depois
-   do `compose up`. Guarde as chaves nos volumes e não no repositório.
+3. **Túnel total (`0.0.0.0/0`).**
+   Faça o PC enviar todo o tráfego pelo lab, configure NAT no servidor e DNS.
+   Cuidado com kill switch, MTU e perda de conectividade.
 
-4. **Trocar senha por chave SSH.**
-   Gere um par de chaves na casa de praia, adicione a pública em
-   `/home/labuser/.ssh/authorized_keys` no servidor e remova o `sshpass`.
+4. **Persistir o `wg2`.**
+   Crie `wg2.conf` no servidor e um script/systemd para subir após o
+   `compose up`. Guarde as chaves no volume e não no repositório.
 
-5. **Usar `wg-quick`.**
-   Monte `wg2.conf` no servidor e `wg0.conf` na casa de praia. Evite
-   `DNS =` para não depender de `resolvconf` no container.
+5. **Endpoint público sem IP público.**
+   Use um VPS como relay: o lab conecta ao VPS e o PC conecta ao VPS, ou o
+   VPS faz DNAT para o lab por um túnel.
 
 6. **Restringir o firewall.**
    Em vez de expor `51821/udp` para o mundo, permita apenas o IP público da
    casa de praia. Documente a regra e o rollback.
 
+7. **Trocar senha por chave SSH.**
+   Gere uma chave no PC, adicione a pública em
+   `/home/labuser/.ssh/authorized_keys` no servidor e remova o uso de
+   `labpass`.
+
 ## Checklist
 
-- [ ] `praia-net` criada em `10.0.50.0/24`.
-- [ ] `casa-praia` em `10.0.50.10`, sem interface na `lab-net`.
+- [ ] PC físico (ou VM) na rede da casa de praia, fora do lab.
 - [ ] `servidor` publica `51821/udp`.
+- [ ] Port forward/security group libera UDP `51821`.
 - [ ] `wg2` no servidor em `10.0.100.1/24`.
-- [ ] `wg0` na casa de praia em `10.0.100.10/24`.
+- [ ] PC com `wg0 10.0.100.10/24`.
+- [ ] Chave pública do PC cadastrada no `wg2`.
 - [ ] Handshake recente nos dois lados.
-- [ ] `ip route get 10.0.100.1` usa `wg0`.
-- [ ] SSH em `labuser@10.0.100.1` retorna `PRAIA_OK`.
-- [ ] `10.0.0.20` não tem rota direta pela interface da praia.
-- [ ] Limpeza executada.
+- [ ] `ssh labuser@10.0.100.1` retorna `PRAIA_OK`.
+- [ ] `AllowedIPs` mínimo (`10.0.100.1/32` no PC).
+- [ ] Port forward removido e `wg2` limpo ao final.
 
 ## Segurança
 
 - Este é um lab: `labpass` e `StrictHostKeyChecking=no` são intencionais.
-- Não exponha `51821/udp` para a internet sem firewall.
-- Não versione chaves privadas; o `.gitignore` já bloqueia chaves e o
-  `scripts/guard.sh` ajuda a evitar segredos no índice.
+- A chave privada do PC nunca sai do PC; a do servidor nunca sai do volume.
+- Não versione chaves privadas; o `.gitignore` e o `scripts/guard.sh` ajudam.
+- Exponha apenas UDP `51821`; não publique SSH do servidor para a internet.
+- Restrinja o firewall ao IP da casa de praia quando possível.
 - Use `AllowedIPs` mínimo. Evite `0.0.0.0/0` sem necessidade.
-- Em produção, use chaves SSH, endpoint com nome DNS e monitoramento.
+- Em produção, use chaves SSH, endpoint com nome DNS, MFA/gestão de chaves e
+  monitoramento.
 
 ## Referências
 
