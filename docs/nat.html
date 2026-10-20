@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Explicação visual da camada de NAT do Rede Lab: forwarding, MASQUERADE, rotas e fluxos de pacotes no container isp.">
+  <title>Camada de NAT — Rede Lab</title>
+  <style>
+    :root {
+      --bg: #080d18;
+      --bg-soft: #0d1526;
+      --surface: #111a2e;
+      --surface-2: #16213a;
+      --border: #26324d;
+      --border-soft: #1c2740;
+      --text: #e8eefb;
+      --muted: #9aa8c2;
+      --faint: #6f7f9c;
+      --accent: #5eead4;
+      --accent-2: #60a5fa;
+      --accent-3: #f59e0b;
+      --danger: #fb7185;
+      --success: #34d399;
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --radius: 16px;
+      --shadow: 0 18px 50px rgba(0, 0, 0, .35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 24px;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(900px 500px at 12% -8%, rgba(96, 165, 250, .16), transparent 60%),
+        radial-gradient(800px 500px at 88% 0%, rgba(94, 234, 212, .10), transparent 58%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    a:hover { color: #a7f3e8; }
+
+    code, pre, kbd {
+      font-family: var(--mono);
+    }
+
+    code {
+      font-size: .92em;
+      color: #c7f9f1;
+      background: rgba(94, 234, 212, .08);
+      border: 1px solid rgba(94, 234, 212, .14);
+      padding: .12em .38em;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    pre code {
+      background: none;
+      border: 0;
+      padding: 0;
+      color: inherit;
+      white-space: pre;
+    }
+
+    .skip-link {
+      position: absolute;
+      left: 16px;
+      top: -60px;
+      z-index: 100;
+      background: var(--accent);
+      color: #042f2e;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 700;
+      transition: top .2s ease;
+    }
+
+    .skip-link:focus { top: 16px; }
+
+    .wrap {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border-soft);
+      background:
+        linear-gradient(180deg, rgba(13, 21, 38, .65), rgba(8, 13, 24, .2)),
+        radial-gradient(700px 300px at 50% 0%, rgba(94, 234, 212, .12), transparent 70%);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, .045) 1px, transparent 1px);
+      background-size: 44px 44px;
+      -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,.85), transparent 90%);
+      mask-image: linear-gradient(180deg, rgba(0,0,0,.85), transparent 90%);
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      padding: 72px 0 34px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.4rem, 6vw, 4.6rem);
+      line-height: 1.03;
+      letter-spacing: -.045em;
+    }
+
+    .lede {
+      max-width: 780px;
+      margin: 20px 0 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.6vw, 1.18rem);
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 26px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--border);
+      background: rgba(17, 26, 46, .72);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 5px 11px;
+      font-size: .76rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+    }
+
+    .badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(94, 234, 212, .7);
+    }
+
+    .badge.blue::before { background: var(--accent-2); box-shadow: 0 0 10px rgba(96, 165, 250, .7); }
+    .badge.amber::before { background: var(--accent-3); box-shadow: 0 0 10px rgba(245, 158, 11, .7); }
+    .badge.rose::before { background: var(--danger); box-shadow: 0 0 10px rgba(251, 113, 133, .7); }
+
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 34px;
+      padding-top: 22px;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .toc a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: .82rem;
+      font-weight: 650;
+      border: 1px solid var(--border-soft);
+      background: rgba(17, 26, 46, .55);
+      padding: 6px 11px;
+      border-radius: 9px;
+      transition: border-color .18s ease, color .18s ease, background .18s ease;
+    }
+
+    .toc a:hover {
+      color: var(--text);
+      border-color: rgba(94, 234, 212, .4);
+      background: rgba(94, 234, 212, .06);
+    }
+
+    /* ---------- Sections ---------- */
+    main { padding: 12px 0 80px; }
+
+    .section {
+      padding: 54px 0 8px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .section:last-of-type { border-bottom: 0; }
+
+    .section-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .section-num {
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      margin-top: 4px;
+      border: 1px solid rgba(94, 234, 212, .3);
+      background: rgba(94, 234, 212, .08);
+      color: var(--accent);
+      border-radius: 11px;
+      font-family: var(--mono);
+      font-size: .9rem;
+      font-weight: 700;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      letter-spacing: -.025em;
+      line-height: 1.2;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      letter-spacing: -.01em;
+    }
+
+    .section-sub {
+      margin: 7px 0 0;
+      color: var(--muted);
+      max-width: 850px;
+    }
+
+    p { margin: 0 0 14px; }
+
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); }
+    .accent { color: var(--accent); }
+    .nowrap { white-space: nowrap; }
+
+    /* ---------- Cards / grid ---------- */
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .card {
+      background: linear-gradient(180deg, rgba(22, 33, 58, .82), rgba(17, 26, 46, .82));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .12);
+    }
+
+    .card h3 { display: flex; align-items: center; gap: 9px; }
+
+    .card p:last-child { margin-bottom: 0; }
+
+    .icon {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(96, 165, 250, .10);
+      border: 1px solid rgba(96, 165, 250, .22);
+      color: var(--accent-2);
+      font-size: .9rem;
+    }
+
+    .icon.teal { background: rgba(94, 234, 212, .10); border-color: rgba(94, 234, 212, .22); color: var(--accent); }
+    .icon.amber { background: rgba(245, 158, 11, .10); border-color: rgba(245, 158, 11, .22); color: var(--accent-3); }
+    .icon.rose { background: rgba(251, 113, 133, .10); border-color: rgba(251, 113, 133, .22); color: var(--danger); }
+
+    /* ---------- Topology ---------- */
+    .topology-card {
+      margin-top: 24px;
+      padding: 18px;
+      background:
+        radial-gradient(600px 240px at 50% 0%, rgba(96, 165, 250, .08), transparent 70%),
+        linear-gradient(180deg, rgba(17, 26, 46, .9), rgba(9, 15, 28, .9));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    .topology-svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      font-family: var(--sans);
+    }
+
+    .node rect {
+      fill: #101a2e;
+      stroke: #2c3b58;
+      stroke-width: 1.5;
+      transition: stroke .2s ease, fill .2s ease;
+    }
+
+    .node .svg-title {
+      fill: var(--text);
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing: -.01em;
+    }
+
+    .node .svg-code {
+      fill: var(--accent);
+      font-family: var(--mono);
+      font-size: 14px;
+    }
+
+    .node .svg-muted, .svg-muted {
+      fill: var(--muted);
+      font-size: 12.5px;
+    }
+
+    .svg-label {
+      fill: var(--accent-2);
+      font-size: 15px;
+      font-weight: 750;
+      letter-spacing: .01em;
+    }
+
+    .node.is-active rect {
+      fill: #0d2728;
+      stroke: var(--accent);
+      stroke-width: 2.5;
+      animation: nodePulse 2.4s ease-in-out infinite;
+    }
+
+    .node.is-active .svg-title { fill: var(--accent); }
+
+    @keyframes nodePulse {
+      0%, 100% { filter: drop-shadow(0 0 0 rgba(94, 234, 212, 0)); }
+      50% { filter: drop-shadow(0 0 14px rgba(94, 234, 212, .32)); }
+    }
+
+    .flow-line {
+      fill: none;
+      stroke: #6e7f9c;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    .flow-line.accent { stroke: var(--accent); }
+    .flow-line.dashed { stroke-dasharray: 7 7; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 22px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+
+    .legend span { display: inline-flex; align-items: center; gap: 8px; }
+
+    .legend i {
+      display: inline-block;
+      width: 22px;
+      height: 0;
+      border-top: 2px solid #6e7f9c;
+    }
+
+    .legend i.accent { border-color: var(--accent); }
+    .legend i.dashed { border-top-style: dashed; }
+
+    /* ---------- Code ---------- */
+    .code-block {
+      position: relative;
+      margin: 16px 0;
+      background: #070c16;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .code-block::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      opacity: .75;
+    }
+
+    .code-block pre {
+      margin: 0;
+      padding: 18px 58px 18px 20px;
+      overflow-x: auto;
+      color: #d7e3f8;
+      font-size: .84rem;
+      line-height: 1.7;
+      tab-size: 2;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 9px;
+      right: 9px;
+      z-index: 2;
+      border: 1px solid var(--border);
+      background: #101a2e;
+      color: var(--muted);
+      border-radius: 7px;
+      padding: 5px 9px;
+      font: 700 .72rem/1 var(--sans);
+      cursor: pointer;
+      transition: color .18s ease, border-color .18s ease, background .18s ease;
+    }
+
+    .copy-btn:hover {
+      color: var(--accent);
+      border-color: rgba(94, 234, 212, .45);
+      background: rgba(94, 234, 212, .07);
+    }
+
+    .copy-btn.copied {
+      color: #042f2e;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .copy-btn:focus-visible,
+    .tab:focus-visible,
+    .toc a:focus-visible,
+    .skip-link:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    /* ---------- Callouts ---------- */
+    .callout {
+      margin: 18px 0;
+      padding: 15px 17px 15px 18px;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent-2);
+      border-radius: 10px;
+      background: rgba(96, 165, 250, .06);
+      color: var(--muted);
+      font-size: .92rem;
+    }
+
+    .callout strong { color: var(--text); }
+    .callout.warn { border-left-color: var(--accent-3); background: rgba(245, 158, 11, .06); }
+    .callout.success { border-left-color: var(--success); background: rgba(52, 211, 153, .06); }
+    .callout.danger { border-left-color: var(--danger); background: rgba(251, 113, 133, .06); }
+
+    /* ---------- Tables ---------- */
+    .table-wrap {
+      margin: 16px 0;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(17, 26, 46, .55);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+      min-width: 620px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    th {
+      background: rgba(22, 33, 58, .9);
+      color: var(--text);
+      font-size: .76rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: rgba(96, 165, 250, .035); }
+
+    .yes { color: var(--success); font-weight: 700; }
+    .no { color: var(--danger); font-weight: 700; }
+
+    /* ---------- Tabs / flows ---------- */
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 22px 0 14px;
+    }
+
+    .tab {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: rgba(17, 26, 46, .8);
+      color: var(--muted);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font: 700 .82rem/1.2 var(--sans);
+      cursor: pointer;
+      transition: color .18s ease, border-color .18s ease, background .18s ease;
+    }
+
+    .tab:hover { color: var(--text); border-color: #3b4a68; }
+
+    .tab[aria-selected="true"] {
+      color: #042f2e;
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(94, 234, 212, .12);
+    }
+
+    .flow-panel {
+      background: linear-gradient(180deg, rgba(22, 33, 58, .72), rgba(13, 21, 38, .72));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+    }
+
+    .flow-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .flow-head h3 { margin: 0; font-size: 1.2rem; }
+    .flow-head .eyebrow { margin-bottom: 4px; }
+
+    .flow-path {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 18px 0 20px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(94, 234, 212, .24);
+      background: rgba(94, 234, 212, .07);
+      color: #d5fff8;
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-family: var(--mono);
+      font-size: .76rem;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .arrow {
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 1rem;
+    }
+
+    .steps {
+      margin: 10px 0 14px;
+      padding-left: 22px;
+      color: var(--muted);
+    }
+
+    .steps li { margin: 7px 0; }
+    .steps li::marker { color: var(--accent); font-weight: 700; }
+
+    .flow-note {
+      margin: 0;
+      padding-top: 14px;
+      border-top: 1px dashed var(--border);
+      color: var(--faint);
+      font-size: .88rem;
+    }
+
+    .badge.ok { color: #b7f7df; border-color: rgba(52, 211, 153, .35); background: rgba(52, 211, 153, .08); }
+    .badge.ok::before { background: var(--success); box-shadow: 0 0 10px rgba(52, 211, 153, .7); }
+    .badge.warn { color: #fde6b0; border-color: rgba(245, 158, 11, .35); background: rgba(245, 158, 11, .08); }
+    .badge.warn::before { background: var(--accent-3); box-shadow: 0 0 10px rgba(245, 158, 11, .7); }
+
+    /* ---------- Lists ---------- */
+    .clean-list {
+      margin: 12px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .clean-list li {
+      position: relative;
+      margin: 9px 0;
+      padding-left: 22px;
+      color: var(--muted);
+    }
+
+    .clean-list li::before {
+      content: "→";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .checklist {
+      margin: 14px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 9px;
+    }
+
+    .checklist li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      color: var(--muted);
+      font-size: .92rem;
+    }
+
+    .checklist .box {
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      margin-top: 1px;
+      border: 1px solid rgba(52, 211, 153, .4);
+      background: rgba(52, 211, 153, .08);
+      color: var(--success);
+      border-radius: 6px;
+      font-size: .72rem;
+      font-weight: 900;
+    }
+
+    /* ---------- Footer ---------- */
+    footer {
+      border-top: 1px solid var(--border-soft);
+      background: rgba(6, 10, 20, .55);
+      padding: 30px 0 40px;
+      color: var(--faint);
+      font-size: .86rem;
+    }
+
+    .footer-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+    }
+
+    .footer-links a { color: var(--muted); }
+    .footer-links a:hover { color: var(--accent); }
+
+    .top-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .top-link:hover { color: var(--accent); }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 900px) {
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      .wrap { width: min(100% - 26px, 1160px); }
+      .hero-inner { padding-top: 48px; }
+      .section { padding-top: 42px; }
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      .flow-panel { padding: 17px; }
+      .tabs { display: grid; grid-template-columns: 1fr 1fr; }
+      .tab { justify-content: center; }
+      .code-block pre { padding-left: 15px; font-size: .78rem; }
+      .topology-card { padding: 10px; }
+      .section-head { gap: 10px; }
+      .section-num { width: 32px; height: 32px; font-size: .8rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+      }
+    }
+
+    @media print {
+      body { background: #fff; color: #111; }
+      .hero { background: none; border-bottom: 1px solid #ccc; }
+      .hero::after, .toc, .copy-btn, .tabs, .skip-link, .top-link { display: none !important; }
+      .card, .flow-panel, .topology-card, .table-wrap, .code-block {
+        background: #fff !important;
+        color: #111 !important;
+        border-color: #bbb !important;
+        box-shadow: none !important;
+      }
+      .section { break-inside: avoid; }
+      a { color: #0645ad; }
+      code { color: #111; background: #f3f4f6; border-color: #ddd; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="hero">
+    <div class="wrap hero-inner">
+      <p class="eyebrow">Rede Lab · documentação visual</p>
+      <h1>Camada de NAT</h1>
+      <p class="lede">
+        Como o container <code>isp</code> transforma a rede do lab em um provedor simulado:
+        forwarding, <code>MASQUERADE</code> e o caminho real de cada pacote — explicado em
+        HTML, CSS e JavaScript puros, sem frameworks e sem dependências externas.
+      </p>
+      <div class="badges" aria-label="Tecnologias envolvidas">
+        <span class="badge">HTML vanilla</span>
+        <span class="badge blue">Docker Compose</span>
+        <span class="badge blue">Podman</span>
+        <span class="badge amber">iptables / nftables</span>
+        <span class="badge amber">WireGuard</span>
+      </div>
+      <nav class="toc" aria-label="Índice da página">
+        <a href="#visao-geral">Visão geral</a>
+        <a href="#componentes">Componentes</a>
+        <a href="#fluxos">Fluxos</a>
+        <a href="#regras">Regras ativas</a>
+        <a href="#evidencias">Evidências</a>
+        <a href="#limitacoes">Limitações</a>
+        <a href="#verificar">Como verificar</a>
+        <a href="#melhorias">Melhorias</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="conteudo" class="wrap">
+    <!-- ================= 1. VISÃO GERAL ================= -->
+    <section class="section" id="visao-geral" aria-labelledby="titulo-visao">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">01</span>
+        <div>
+          <h2 id="titulo-visao">Visão geral</h2>
+          <p class="section-sub">
+            O NAT não é um serviço externo: é um conjunto de regras dentro do network namespace
+            do container <code>isp</code>, que também atua como roteador padrão dos clientes.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-3">
+        <article class="card">
+          <h3><span class="icon teal" aria-hidden="true">↔</span> Forwarding</h3>
+          <p class="muted">
+            O kernel do container precisa aceitar encaminhar pacotes entre interfaces.
+            Isso é feito com <code>net.ipv4.ip_forward=1</code> e
+            <code>net.ipv4.conf.all.forwarding=1</code>.
+          </p>
+        </article>
+        <article class="card">
+          <h3><span class="icon amber" aria-hidden="true">⇄</span> MASQUERADE</h3>
+          <p class="muted">
+            Na saída <code>eth0</code>, o ISP troca o IP de origem dos pacotes pelo próprio
+            <code>10.0.0.1</code>. É o SNAT que simula o NAT do provedor.
+          </p>
+        </article>
+        <article class="card">
+          <h3><span class="icon" aria-hidden="true">✓</span> FORWARD ACCEPT</h3>
+          <p class="muted">
+            A chain <code>FORWARD</code> recebe uma regra <code>ACCEPT</code> para permitir
+            que o tráfego atravesse o roteador containerizado.
+          </p>
+        </article>
+      </div>
+
+      <div class="topology-card">
+        <svg class="topology-svg" viewBox="0 0 960 460" role="img" aria-labelledby="topo-title topo-desc">
+          <title id="topo-title">Topologia da camada de NAT</title>
+          <desc id="topo-desc">
+            Casa em 10.0.0.10 e servidor em 10.0.0.20 na bridge lab-net. O ISP em 10.0.0.1
+            encaminha o tráfego para o gateway reservado da bridge em 10.0.0.254 e aplica
+            MASQUERADE. A internet fica fora da bridge.
+          </desc>
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#6e7f9c"></path>
+            </marker>
+            <marker id="arrow-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#5eead4"></path>
+            </marker>
+            <linearGradient id="bridgeGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#60a5fa" stop-opacity=".13"></stop>
+              <stop offset="1" stop-color="#60a5fa" stop-opacity=".025"></stop>
+            </linearGradient>
+          </defs>
+
+          <!-- Bridge -->
+          <g>
+            <rect x="40" y="170" width="880" height="80" rx="16" fill="url(#bridgeGrad)" stroke="#3b82f6" stroke-opacity=".45" stroke-dasharray="6 6"></rect>
+            <text x="64" y="202" class="svg-label">bridge lab-net</text>
+            <text x="64" y="226" class="svg-muted">10.0.0.0/24 · gateway reservado 10.0.0.254</text>
+            <text x="896" y="202" text-anchor="end" class="svg-muted">L2 compartilhado</text>
+          </g>
+
+          <!-- Casa -->
+          <g class="node" data-node="casa">
+            <rect x="80" y="40" width="220" height="90" rx="14"></rect>
+            <text x="104" y="74" class="svg-title">Casa</text>
+            <text x="104" y="100" class="svg-code">10.0.0.10</text>
+            <text x="104" y="120" class="svg-muted">wg1 · 10.0.99.10</text>
+          </g>
+
+          <!-- Servidor -->
+          <g class="node" data-node="servidor">
+            <rect x="660" y="40" width="220" height="90" rx="14"></rect>
+            <text x="684" y="74" class="svg-title">Servidor</text>
+            <text x="684" y="100" class="svg-code">10.0.0.20</text>
+            <text x="684" y="120" class="svg-muted">wg0 · 10.0.99.1:51820/udp</text>
+          </g>
+
+          <!-- L2 direto -->
+          <path d="M300 85 H660" class="flow-line dashed" marker-end="url(#arrow)"></path>
+          <text x="480" y="72" text-anchor="middle" class="svg-muted">L2 direto · sem ISP</text>
+
+          <!-- Clientes para a bridge -->
+          <path d="M190 130 V170" class="flow-line" marker-end="url(#arrow)"></path>
+          <path d="M770 130 V170" class="flow-line" marker-end="url(#arrow)"></path>
+
+          <!-- Bridge para ISP -->
+          <path d="M480 250 V300" class="flow-line accent" marker-end="url(#arrow-accent)"></path>
+          <text x="494" y="280" class="svg-muted">clientes → ISP 10.0.0.1</text>
+
+          <!-- ISP -->
+          <g class="node" data-node="isp">
+            <rect x="370" y="300" width="220" height="90" rx="14"></rect>
+            <text x="394" y="334" class="svg-title">ISP</text>
+            <text x="394" y="360" class="svg-code">10.0.0.1</text>
+            <text x="394" y="380" class="svg-muted">FORWARD + MASQUERADE</text>
+          </g>
+
+          <!-- Internet -->
+          <g class="node" data-node="internet">
+            <rect x="710" y="300" width="180" height="90" rx="14"></rect>
+            <text x="734" y="334" class="svg-title">Internet</text>
+            <text x="734" y="360" class="svg-muted">fora da bridge</text>
+            <text x="734" y="380" class="svg-muted">NAT final do host</text>
+          </g>
+
+          <!-- ISP para Internet -->
+          <path d="M590 345 H710" class="flow-line accent" marker-end="url(#arrow-accent)"></path>
+          <text x="650" y="333" text-anchor="middle" class="svg-muted">MASQUERADE</text>
+
+          <text x="480" y="440" text-anchor="middle" class="svg-muted">
+            O ISP usa 10.0.0.254 como próximo salto; a bridge usa esse IP como gateway reservado.
+          </text>
+        </svg>
+        <div class="legend" aria-label="Legenda do diagrama">
+          <span><i class="accent"></i> caminho roteado pelo ISP</span>
+          <span><i class="dashed"></i> tráfego L2 direto (casa ↔ servidor)</span>
+          <span><i></i> enlace com a bridge</span>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Resumo em uma frase:</strong> o ISP recebe o tráfego que os clientes enviam
+        para fora da sub-rede, encaminha com <code>FORWARD</code>, aplica <code>MASQUERADE</code>
+        e entrega ao gateway <code>10.0.0.254</code>, de onde o host faz o NAT final para a internet.
+      </div>
+    </section>
+
+    <!-- ================= 2. COMPONENTES ================= -->
+    <section class="section" id="componentes" aria-labelledby="titulo-componentes">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">02</span>
+        <div>
+          <h2 id="titulo-componentes">Onde está implementado</h2>
+          <p class="section-sub">
+            A camada é pequena e explícita: imagem, entrypoint, privilégios e rede.
+          </p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Arquivo / recurso</th>
+              <th>Responsabilidade</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>isp/Dockerfile</code></td>
+              <td>Instala <code>iptables</code>, <code>iptables-nft</code>, <code>iproute</code>, <code>iputils</code>, <code>procps-ng</code> e <code>openssh-clients</code>.</td>
+            </tr>
+            <tr>
+              <td><code>isp/entrypoint.sh</code></td>
+              <td>Ativa forwarding, limpa as chains, cria <code>FORWARD ACCEPT</code> e <code>MASQUERADE</code>, e mantém o container vivo.</td>
+            </tr>
+            <tr>
+              <td><code>docker-compose.yml</code></td>
+              <td>Define <code>cap_add: NET_ADMIN</code>, os <code>sysctls</code> de forwarding e o IP fixo <code>10.0.0.1</code>.</td>
+            </tr>
+            <tr>
+              <td><code>scripts/deploy.sh</code></td>
+              <td>Faz o equivalente no modo por scripts: <code>--cap-add NET_ADMIN</code> e <code>--sysctl</code>.</td>
+            </tr>
+            <tr>
+              <td><code>network/lab-network.sh</code></td>
+              <td>Cria a bridge com <code>--subnet 10.0.0.0/24</code> e <code>--gateway 10.0.0.254</code>.</td>
+            </tr>
+            <tr>
+              <td><code>casa/entrypoint.sh</code> e <code>servidor/entrypoint.sh</code></td>
+              <td>Apontam o default route para o ISP: <code>ip route replace default via 10.0.0.1</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Entrypoint do ISP</h3>
+      <div class="code-block">
+        <button class="copy-btn" type="button" aria-label="Copiar código do entrypoint">Copiar</button>
+        <pre><code>#!/usr/bin/env bash
+set -euo pipefail
+
+# 1. Habilita forwarding no kernel do container
+sysctl -w net.ipv4.ip_forward=1 &gt;/dev/null 2&gt;&amp;1 || true
+sysctl -w net.ipv4.conf.all.forwarding=1 &gt;/dev/null 2&gt;&amp;1 || true
+
+# 2. Limpa regras antigas e permite forwarding
+iptables -t nat -F POSTROUTING 2&gt;/dev/null || true
+iptables -F FORWARD 2&gt;/dev/null || true
+iptables -A FORWARD -j ACCEPT 2&gt;/dev/null || true
+
+# 3. SNAT na saída: troca o IP de origem por 10.0.0.1
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE 2&gt;/dev/null || true
+
+# 4. Também tenta o backend nftables (pode duplicar a regra)
+iptables-nft -t nat -A POSTROUTING -o eth0 -j MASQUERADE 2&gt;/dev/null || true
+
+exec tail -f /dev/null</code></pre>
+      </div>
+
+      <div class="callout warn">
+        <strong>Por que <code>|| true</code>?</strong> Em Podman rootless, o <code>iptables</code>
+        pode não conseguir carregar os módulos do kernel. O entrypoint real usa
+        <code>2&gt;/dev/null || true</code> em cada comando para não derrubar o container.
+        O efeito colateral é que a camada de NAT é <em>best-effort</em> nesses ambientes.
+      </div>
+
+      <div class="grid grid-2">
+        <div>
+          <h3>Compose</h3>
+          <div class="code-block">
+            <button class="copy-btn" type="button" aria-label="Copiar trecho do Compose">Copiar</button>
+            <pre><code>isp:
+  cap_add:
+    - NET_ADMIN
+  sysctls:
+    net.ipv4.ip_forward: "1"
+    net.ipv4.conf.all.forwarding: "1"
+  networks:
+    lab-net:
+      ipv4_address: 10.0.0.1</code></pre>
+          </div>
+        </div>
+        <div>
+          <h3>Rede</h3>
+          <div class="code-block">
+            <button class="copy-btn" type="button" aria-label="Copiar comando de criação da rede">Copiar</button>
+            <pre><code>podman network create \
+  --driver bridge \
+  --subnet 10.0.0.0/24 \
+  --gateway 10.0.0.254 \
+  lab-net</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Por que o gateway é <code>10.0.0.254</code>?</strong> O Docker reserva o IP do
+        gateway da rede e não permite atribuí-lo a um container. Por isso a bridge usa
+        <code>10.0.0.254</code> e o ISP fica em <code>10.0.0.1</code>, que continua sendo o
+        gateway lógico para os clientes.
+      </div>
+    </section>
+
+    <!-- ================= 3. FLUXOS ================= -->
+    <section class="section" id="fluxos" aria-labelledby="titulo-fluxos">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">03</span>
+        <div>
+          <h2 id="titulo-fluxos">Fluxos de pacotes</h2>
+          <p class="section-sub">
+            O caminho depende do destino. Selecione um fluxo para destacar os nós e ver a rota real.
+          </p>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Fluxos de pacotes">
+        <button class="tab" id="tab-internet" type="button" role="tab" aria-selected="true" aria-controls="flow-panel" data-flow="internet">Internet</button>
+        <button class="tab" id="tab-local" type="button" role="tab" aria-selected="false" aria-controls="flow-panel" data-flow="local" tabindex="-1">Servidor local</button>
+        <button class="tab" id="tab-wg" type="button" role="tab" aria-selected="false" aria-controls="flow-panel" data-flow="wg" tabindex="-1">WireGuard</button>
+      </div>
+
+      <div class="flow-panel" id="flow-panel" role="tabpanel" aria-labelledby="tab-internet" aria-live="polite"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fluxo</th>
+              <th>Passa pelo ISP?</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Internet (<code>1.1.1.1</code>)</td>
+              <td class="yes">Sim</td>
+              <td>O default route da casa aponta para <code>10.0.0.1</code>; o ISP encaminha e aplica MASQUERADE.</td>
+            </tr>
+            <tr>
+              <td>Servidor local (<code>10.0.0.20</code>)</td>
+              <td class="no">Não</td>
+              <td>Destino dentro de <code>10.0.0.0/24</code>: rota direta <code>dev eth0</code>, comutada na bridge.</td>
+            </tr>
+            <tr>
+              <td>WireGuard (<code>10.0.99.1</code>)</td>
+              <td class="no">Não</td>
+              <td>Rota <code>dev wg1</code>; o UDP externo vai para <code>10.0.0.20:51820</code>, que é local.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout success">
+        <strong>Ponto importante:</strong> o SSH sobre WireGuard funciona sem passar pelo NAT.
+        Ele prova a VPN e o roteamento local. A camada de NAT é exercitada pelo tráfego de
+        saída para a internet, como <code>curl</code> e atualizações de pacotes.
+      </div>
+    </section>
+
+    <!-- ================= 4. REGRAS ATIVAS ================= -->
+    <section class="section" id="regras" aria-labelledby="titulo-regras">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">04</span>
+        <div>
+          <h2 id="titulo-regras">Regras ativas</h2>
+          <p class="section-sub">
+            Estado observado dentro do container <code>isp</code> em runtime.
+          </p>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <button class="copy-btn" type="button" aria-label="Copiar saída do iptables-save">Copiar</button>
+        <pre><code>$ podman exec isp iptables-save
+
+*filter
+:FORWARD ACCEPT [0:0]
+-A FORWARD -j ACCEPT
+COMMIT
+
+*nat
+:POSTROUTING ACCEPT [0:0]
+-A POSTROUTING -o eth0 -j MASQUERADE
+-A POSTROUTING -o eth0 -j MASQUERADE
+COMMIT</code></pre>
+      </div>
+
+      <div class="grid grid-3">
+        <article class="card">
+          <h3><span class="icon teal" aria-hidden="true">1</span> FORWARD</h3>
+          <p class="muted">
+            <code>policy ACCEPT</code> e uma regra <code>ACCEPT</code> explícita.
+            O tráfego de entrada e saída pode atravessar o ISP.
+          </p>
+        </article>
+        <article class="card">
+          <h3><span class="icon amber" aria-hidden="true">2</span> POSTROUTING</h3>
+          <p class="muted">
+            <code>-o eth0 -j MASQUERADE</code>: o IP de origem é substituído pelo
+            endereço da interface de saída, <code>10.0.0.1</code>.
+          </p>
+        </article>
+        <article class="card">
+          <h3><span class="icon rose" aria-hidden="true">!</span> Duplicidade</h3>
+          <p class="muted">
+            Há duas regras MASQUERADE porque o entrypoint chama <code>iptables</code> e
+            <code>iptables-nft</code>. A primeira casa; a segunda é redundante.
+          </p>
+        </article>
+      </div>
+
+      <div class="callout warn">
+        <strong>Backend:</strong> dependendo da distribuição, <code>iptables</code> e
+        <code>iptables-nft</code> podem apontar para o mesmo backend. O resultado prático é
+        uma regra duplicada — inofensiva, mas fácil de limpar usando apenas um dos comandos.
+      </div>
+    </section>
+
+    <!-- ================= 5. EVIDÊNCIAS ================= -->
+    <section class="section" id="evidencias" aria-labelledby="titulo-evidencias">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">05</span>
+        <div>
+          <h2 id="titulo-evidencias">Evidências em runtime</h2>
+          <p class="section-sub">
+            Saídas reais do lab. O IP público é ilustrativo; no ambiente de teste, host e
+            casa retornaram o mesmo endereço, confirmando a saída NATeada.
+          </p>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <button class="copy-btn" type="button" aria-label="Copiar evidências de runtime">Copiar</button>
+        <pre><code>$ podman exec isp sysctl net.ipv4.ip_forward
+net.ipv4.ip_forward = 1
+
+$ podman exec isp sysctl net.ipv4.conf.all.forwarding
+net.ipv4.conf.all.forwarding = 1
+
+$ podman exec isp iptables -t nat -L POSTROUTING -n -v
+Chain POSTROUTING (policy ACCEPT)
+target     prot opt in     out     source               destination
+MASQUERADE all  --  *      eth0    0.0.0.0/0            0.0.0.0/0
+MASQUERADE all  --  *      eth0    0.0.0.0/0            0.0.0.0/0
+
+$ podman exec casa ip route get 1.1.1.1
+1.1.1.1 via 10.0.0.1 dev eth0 src 10.0.0.10
+
+$ podman exec casa ip route get 10.0.0.20
+10.0.0.20 dev eth0 src 10.0.0.10
+
+$ podman exec casa ip route get 10.0.99.1
+10.0.99.1 dev wg1 src 10.0.99.10
+
+$ curl -s https://api.ipify.org
+203.0.113.10
+
+$ podman exec casa curl -s https://api.ipify.org
+203.0.113.10</code></pre>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="callout success">
+          <strong>O que confirma:</strong> forwarding ligado, regra MASQUERADE ativa,
+          rota para a internet via ISP e rota local direta para o servidor.
+        </div>
+        <div class="callout">
+          <strong>O que não confirma sozinho:</strong> o IP público igual prova que a saída
+          funciona, mas não isola a contribuição do ISP. Para isso, observe os contadores
+          das regras ou capture tráfego no ISP.
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 6. LIMITAÇÕES ================= -->
+    <section class="section" id="limitacoes" aria-labelledby="titulo-limitacoes">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">06</span>
+        <div>
+          <h2 id="titulo-limitacoes">Limitações e cuidados</h2>
+          <p class="section-sub">
+            O que é simulação, o que depende do host e o que pode enganar na leitura.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <article class="card">
+          <h3><span class="icon amber" aria-hidden="true">⚠</span> Rootless</h3>
+          <p class="muted">
+            Em Podman rootless, o <code>iptables</code> depende dos módulos do kernel e da
+            configuração do host. Se a tabela não existir, os comandos falham silenciosamente
+            por causa do <code>|| true</code>. Em Docker rootful, o comportamento é mais previsível.
+          </p>
+        </article>
+        <article class="card">
+          <h3><span class="icon" aria-hidden="true">1</span> Uma interface só</h3>
+          <p class="muted">
+            O ISP tem apenas <code>eth0</code>. Ele faz NAT entre a sub-rede do lab e o
+            gateway da bridge do host. Não é um ISP completo com interfaces LAN e WAN separadas.
+          </p>
+        </article>
+        <article class="card">
+          <h3><span class="icon rose" aria-hidden="true">↻</span> NAT redundante</h3>
+          <p class="muted">
+            O host já faz NAT dos containers. A camada do ISP é uma simulação educacional
+            adicional; ela demonstra o conceito, mas não é obrigatória para o SSH sobre WireGuard.
+          </p>
+        </article>
+        <article class="card">
+          <h3><span class="icon teal" aria-hidden="true">⌁</span> Escopo da regra</h3>
+          <p class="muted">
+            A regra é <code>-o eth0 -j MASQUERADE</code> sem <code>-s 10.0.0.0/24</code>.
+            Funciona porque só o lab usa essa interface; em produção, o ideal é escopar a origem.
+          </p>
+        </article>
+      </div>
+
+      <div class="callout danger">
+        <strong>Não confunda:</strong> o WireGuard é um túnel ponto a ponto entre
+        <code>10.0.99.10</code> e <code>10.0.99.1</code>. O pacote externo é UDP para
+        <code>10.0.0.20:51820</code>, dentro da própria sub-rede. Ele não atravessa o NAT do ISP.
+      </div>
+    </section>
+
+    <!-- ================= 7. COMO VERIFICAR ================= -->
+    <section class="section" id="verificar" aria-labelledby="titulo-verificar">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">07</span>
+        <div>
+          <h2 id="titulo-verificar">Como verificar</h2>
+          <p class="section-sub">
+            Use <code>podman</code> ou troque por <code>docker</code> conforme o engine do lab.
+          </p>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <button class="copy-btn" type="button" aria-label="Copiar comandos de verificação">Copiar</button>
+        <pre><code># Forwarding ligado?
+podman exec isp sysctl net.ipv4.ip_forward
+podman exec isp sysctl net.ipv4.conf.all.forwarding
+
+# Regras de NAT e forwarding
+podman exec isp iptables -t nat -L POSTROUTING -n -v
+podman exec isp iptables -L FORWARD -n -v
+
+# Rotas dos clientes
+podman exec casa ip route get 1.1.1.1
+podman exec casa ip route get 10.0.0.20
+podman exec casa ip route get 10.0.99.1
+
+# Saída externa: compare host e casa
+curl -s https://api.ipify.org
+podman exec casa curl -s https://api.ipify.org</code></pre>
+      </div>
+
+      <div class="card">
+        <h3>Checklist rápido</h3>
+        <ul class="checklist">
+          <li><span class="box" aria-hidden="true">✓</span> <span><code>ip_forward</code> e <code>conf.all.forwarding</code> iguais a <code>1</code>.</span></li>
+          <li><span class="box" aria-hidden="true">✓</span> <span><code>FORWARD</code> com política <code>ACCEPT</code> e/ou regra <code>ACCEPT</code>.</span></li>
+          <li><span class="box" aria-hidden="true">✓</span> <span><code>POSTROUTING</code> com <code>MASQUERADE</code> na saída <code>eth0</code>.</span></li>
+          <li><span class="box" aria-hidden="true">✓</span> <span>Rota para <code>1.1.1.1</code> via <code>10.0.0.1</code>.</span></li>
+          <li><span class="box" aria-hidden="true">✓</span> <span>Rota para <code>10.0.0.20</code> direta por <code>eth0</code>.</span></li>
+          <li><span class="box" aria-hidden="true">✓</span> <span>Rota para <code>10.0.99.1</code> por <code>wg1</code>.</span></li>
+          <li><span class="box" aria-hidden="true">✓</span> <span>Host e casa retornam o mesmo IP público (ou a saída falha de forma consistente).</span></li>
+        </ul>
+      </div>
+
+      <div class="callout">
+        <strong>Dica:</strong> para provar que o tráfego passa pelo ISP, rode
+        <code>podman exec isp iptables -t nat -L POSTROUTING -n -v</code> antes e depois de
+        um <code>curl</code> na casa e observe os contadores aumentarem.
+      </div>
+    </section>
+
+    <!-- ================= 8. MELHORIAS ================= -->
+    <section class="section" id="melhorias" aria-labelledby="titulo-melhorias">
+      <div class="section-head">
+        <span class="section-num" aria-hidden="true">08</span>
+        <div>
+          <h2 id="titulo-melhorias">Melhorias possíveis</h2>
+          <p class="section-sub">
+            Itens discutidos, mas não implementados nesta versão.
+          </p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Melhoria</th>
+              <th>Ganho</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Usar apenas <code>iptables-nft</code> ou <code>nft</code></td>
+              <td>Elimina a regra MASQUERADE duplicada e deixa o backend explícito.</td>
+            </tr>
+            <tr>
+              <td>Escopar o NAT com <code>-s 10.0.0.0/24</code></td>
+              <td>Evita NATear tráfego que não pertence ao lab.</td>
+            </tr>
+            <tr>
+              <td>Adicionar uma rede WAN e um container <code>externo</code></td>
+              <td>Simula um ISP com duas interfaces e permite testar forwarding/NAT de verdade.</td>
+            </tr>
+            <tr>
+              <td>Checar NAT no <code>scripts/doctor.sh</code></td>
+              <td>Detecta cedo ambientes rootless onde as regras não subiram.</td>
+            </tr>
+            <tr>
+              <td>Documentar dependência de <code>NET_ADMIN</code> e módulos</td>
+              <td>Reduz surpresa ao rodar em hosts diferentes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout success">
+        <strong>Status:</strong> a camada atual é suficiente para o objetivo educacional do lab:
+        mostrar forwarding, NAT e o caminho dos pacotes sem esconder as limitações do ambiente rootless.
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-grid">
+      <div>
+        <p style="margin:0 0 6px; color: var(--muted); font-weight: 700;">Rede Lab · Camada de NAT</p>
+        <p style="margin:0;">Página estática em HTML, CSS e JavaScript puros. Sem frameworks, sem CDN.</p>
+      </div>
+      <div class="footer-links" aria-label="Links relacionados">
+        <a href="../README.md">README</a>
+        <a href="topologia.md">Topologia</a>
+        <a href="compose.md">Compose</a>
+        <a href="https://github.com/dionarley/rede-lab">GitHub</a>
+        <a class="top-link" href="#conteudo">↑ topo</a>
+      </div>
+    </div>
+    <div class="wrap" style="margin-top:18px; color: var(--faint);">
+      © <span id="year">2026</span> Rede Lab. Valores de IP público e contadores são ilustrativos.
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      "use strict";
+
+      const flows = {
+        internet: {
+          eyebrow: "Fluxo de saída",
+          title: "Casa → Internet",
+          badge: "NAT ativo",
+          badgeClass: "ok",
+          path: ["Casa 10.0.0.10", "ISP 10.0.0.1", "Bridge 10.0.0.254", "Internet"],
+          route: "1.1.1.1 via 10.0.0.1 dev eth0 src 10.0.0.10",
+          steps: [
+            "A rota default da casa aponta para o ISP em <code>10.0.0.1</code>.",
+            "O ISP recebe o pacote e permite a travessia pela chain <code>FORWARD</code>.",
+            "Na saída <code>eth0</code>, o <code>MASQUERADE</code> troca a origem para <code>10.0.0.1</code>.",
+            "O próximo salto é <code>10.0.0.254</code>, o gateway reservado da bridge.",
+            "O host aplica o NAT final e o pacote sai para a internet."
+          ],
+          note: "Este é o único fluxo que atravessa o ISP e exercita a camada de NAT.",
+          highlight: ["casa", "isp", "internet"]
+        },
+        local: {
+          eyebrow: "Fluxo local",
+          title: "Casa → Servidor 10.0.0.20",
+          badge: "L2 direto",
+          badgeClass: "ok",
+          path: ["Casa 10.0.0.10", "Bridge lab-net", "Servidor 10.0.0.20"],
+          route: "10.0.0.20 dev eth0 src 10.0.0.10",
+          steps: [
+            "O destino <code>10.0.0.20</code> pertence à sub-rede <code>10.0.0.0/24</code>.",
+            "O kernel usa a rota diretamente conectada <code>10.0.0.0/24 dev eth0</code>.",
+            "O pacote é comutado na bridge e entregue ao servidor.",
+            "O ISP não participa: não há forwarding nem NAT nesse caminho."
+          ],
+          note: "É por isso que o SSH direto para o servidor funciona mesmo sem NAT.",
+          highlight: ["casa", "servidor"]
+        },
+        wg: {
+          eyebrow: "Fluxo VPN",
+          title: "Casa → WireGuard → Servidor",
+          badge: "Túnel",
+          badgeClass: "blue",
+          path: ["Casa wg1 10.0.99.10", "UDP 10.0.0.20:51820", "Servidor wg0 10.0.99.1"],
+          route: "10.0.99.1 dev wg1 src 10.0.99.10",
+          steps: [
+            "O destino <code>10.0.99.1</code> casa com a rota <code>10.0.99.0/24 dev wg1</code>.",
+            "O WireGuard encapsula o pacote em UDP com destino <code>10.0.0.20:51820</code>.",
+            "O endereço <code>10.0.0.20</code> é local, então o UDP vai direto pela bridge.",
+            "O servidor descriptografa e entrega o pacote ao sshd em <code>10.0.99.1:22</code>."
+          ],
+          note: "O SSH dentro do túnel é criptografado; o UDP externo é local e não passa pelo ISP.",
+          highlight: ["casa", "servidor"]
+        }
+      };
+
+      const tabs = Array.from(document.querySelectorAll('[role="tab"][data-flow]'));
+      const panel = document.getElementById('flow-panel');
+      const nodes = Array.from(document.querySelectorAll('.node[data-node]'));
+
+      function bindCopyButtons(root) {
+        root.querySelectorAll('.copy-btn').forEach(function (button) {
+          if (button.dataset.bound === 'true') return;
+          button.dataset.bound = 'true';
+          button.addEventListener('click', function () {
+            const block = button.closest('.code-block');
+            const code = block ? block.querySelector('code') : null;
+            if (!code) return;
+            copyText(code.textContent.trim()).then(function () {
+              const original = button.textContent;
+              button.textContent = 'Copiado!';
+              button.classList.add('copied');
+              window.setTimeout(function () {
+                button.textContent = original;
+                button.classList.remove('copied');
+              }, 1400);
+            }).catch(function () {
+              button.textContent = 'Falhou';
+              window.setTimeout(function () {
+                button.textContent = 'Copiar';
+              }, 1400);
+            });
+          });
+        });
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          return navigator.clipboard.writeText(text);
+        }
+        return new Promise(function (resolve, reject) {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.top = '-1000px';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            const ok = document.execCommand('copy');
+            textarea.remove();
+            ok ? resolve() : reject(new Error('copy failed'));
+          } catch (error) {
+            textarea.remove();
+            reject(error);
+          }
+        });
+      }
+
+      function renderFlow(key) {
+        const flow = flows[key];
+        if (!flow) return;
+
+        tabs.forEach(function (tab) {
+          const active = tab.dataset.flow === key;
+          tab.setAttribute('aria-selected', String(active));
+          tab.tabIndex = active ? 0 : -1;
+        });
+
+        nodes.forEach(function (node) {
+          node.classList.toggle('is-active', flow.highlight.indexOf(node.dataset.node) !== -1);
+        });
+
+        panel.setAttribute('aria-labelledby', 'tab-' + key);
+        panel.innerHTML = [
+          '<div class="flow-head">',
+          '  <div>',
+          '    <p class="eyebrow">' + flow.eyebrow + '</p>',
+          '    <h3>' + flow.title + '</h3>',
+          '  </div>',
+          '  <span class="badge ' + flow.badgeClass + '">' + flow.badge + '</span>',
+          '</div>',
+          '<div class="flow-path" aria-label="Caminho do pacote">',
+          flow.path.map(function (step, index) {
+            return '<span class="pill">' + step + '</span>' +
+              (index < flow.path.length - 1 ? '<span class="arrow" aria-hidden="true">→</span>' : '');
+          }).join(''),
+          '</div>',
+          '<div class="code-block">',
+          '  <button class="copy-btn" type="button" aria-label="Copiar rota">Copiar</button>',
+          '  <pre><code>' + flow.route + '</code></pre>',
+          '</div>',
+          '<ol class="steps">',
+          flow.steps.map(function (step) { return '<li>' + step + '</li>'; }).join(''),
+          '</ol>',
+          '<p class="flow-note">' + flow.note + '</p>'
+        ].join('');
+
+        bindCopyButtons(panel);
+      }
+
+      tabs.forEach(function (tab, index) {
+        tab.addEventListener('click', function () {
+          renderFlow(tab.dataset.flow);
+        });
+
+        tab.addEventListener('keydown', function (event) {
+          if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+          event.preventDefault();
+          const direction = event.key === 'ArrowRight' ? 1 : -1;
+          const next = tabs[(index + direction + tabs.length) % tabs.length];
+          next.focus();
+          renderFlow(next.dataset.flow);
+        });
+      });
+
+      bindCopyButtons(document);
+      renderFlow('internet');
+
+      const year = document.getElementById('year');
+      if (year) year.textContent = String(new Date().getFullYear());
+    }());
+  </script>
+</body>
+</html>
